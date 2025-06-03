@@ -35,6 +35,8 @@ lora:
 actor_rollout_ref:
   _delete_: true                    # nuke template subtree
   hybrid_engine: true
+  rollout:
+    name: sglang
   model:
     path: "Qwen/Qwen1.5-0.5B-Chat"
     tokenizer_path: "Qwen/Qwen1.5-0.5B-Chat"
