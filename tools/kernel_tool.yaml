@@ -1,0 +1,18 @@
+# Registers KernelBenchTool so SGLang + Verl can invoke it.
+
+tools:
+  - class_name: my_kernel_tool.KernelBenchTool
+    tool_schema:
+      name: "kernel_bench"
+      description: |
+        Compile + run a CUDA kernel and return JSON with {
+          ok: bool, compile_ms: float, runtime_ms: float,
+          best_runtime_ms: float | null, log: str
+        }
+      parameters:
+        type: object
+        properties:
+          query:
+            type: string
+            description: "CUDA kernel source code"
+        required: [query]
