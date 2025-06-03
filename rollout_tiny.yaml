@@ -1,0 +1,52 @@
+# rollout_tiny.yaml  (put next to the large one)
+actor_rollout_ref:
+  rollout:
+    name: "sglang"
+    multi_turn: true
+    tool_kwargs:
+      tools_config_file: "tools/kernel_tool.yaml"
+    context_postprocessor:
+      _target_: verl.utils.context_reducer.retain_last_n
+      n: 4                          # less history → less KV
+    val_kwargs:
+      max_new_tokens: 512
+    engine_kwargs:
+      vllm:
+        dtype: "float16"
+        quantization: "awq"         # 4‑bit
+        enforce_eager: true
+        trust_remote_code: true
+    free_cache_engine: true
+  model:
+    path: "Qwen/Qwen1.5-0.5B-Chat"
+
+n_actors: 1                         # one GPU, one actor
+
+# LoRA adaptor (keeps optimizer state < 300 MB)
+lora:
+  r: 16
+  alpha: 32
+  target_modules: ["q_proj", "k_proj", "v_proj"]
+
+algorithm:
+  name: ppo
+  gamma: 0.4
+  adv_estimator: grpo
+  clip_range: 0.2
+  vf_coef: 1.0
+  learning_rate: 5e-5
+  rollout_batch_size: 2            # 2 traj before each update
+
+custom_reward_function:
+  path: "kevin_reward.py"
+  name: "compute_score"
+
+data_module:
+  _target_: verl.data.jsonl.JsonlDataModule
+  path: "data/kernelbench_train.jsonl"  # 180 prompts
+  text_key: "prompt"
+  batch_size: 1
+
+env:
+  GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
+
