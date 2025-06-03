@@ -1,13 +1,11 @@
-# ---------------------------------------------------------------
-# Inherit everything veRL needs, then patch the tiny‑GPU tweaks.
-# ---------------------------------------------------------------
+# --- inherit the built‑in PPO template -------------------------
 defaults:
-  - trainer: ppo                     # veRL’s built‑in PPO base
+  - trainer/ppo_trainer         # ← correct group name
   - _self_
 
-# ---------- tiny overrides -------------------------------------
+# --- your tiny‑GPU overrides ----------------------------------
 ray_init:
-  num_cpus: 4                       # or fewer if host is small
+  num_cpus: 4
   num_gpus: 1
 
 policy:
