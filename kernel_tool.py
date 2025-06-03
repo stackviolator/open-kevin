@@ -42,12 +42,19 @@ def _nvcc_compile_run(code: str) -> Dict[str, float | str | bool]:
 
 
 class KernelBenchTool(BaseTool):
-    """Compile + run LLM‑generated CUDA kernels with sandboxing & watchdog."""
+    """Compile + run LLM‑generated CUDA kernels with sandboxing & watchdog.
+
+    Accepts optional `config` and `tool_schema` so it can be instantiated
+    *both* by Verl’s dynamic loader **and** directly in unit tests.
+    """
 
     name = "kernel_bench"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config: dict | None = None, tool_schema: dict | None = None):
+        # Provide minimal fallbacks so plain `KernelBenchTool()` works in tests
+        config = config or {}
+        tool_schema = tool_schema or {"name": self.name}
+        super().__init__(config, tool_schema)
         self.best_runtime_ms: float | None = None
 
     # ------------------------------------------------------------------
@@ -61,8 +68,8 @@ class KernelBenchTool(BaseTool):
         m = KernelBenchTool._GRID_RE.search(src)
         if not m:
             return False
-        dims = [int(d.strip()) for d in m.group(1).split(",") if d.strip()]
-        return any(d > GRID_LIMIT for d in dims)
+        dims = [int(d.strip() or 1) for d in m.group(1).split(",")]
+        return any(d > GRID_LIMIT for d in dims if d)
 
     def _safe_launch(self, code: str) -> Dict[str, float | str | bool]:
         """Fork a subprocess; kill it if it exceeds TIMEOUT_S."""
@@ -85,6 +92,7 @@ class KernelBenchTool(BaseTool):
 
     # ------------------------------------------------------------------
     # public tool interface --------------------------------------------
+    # ------------------------------------------------------------------ --------------------------------------------
     # ------------------------------------------------------------------
     def __call__(self, query: str, **_) -> str:
         res = self._safe_launch(query)
