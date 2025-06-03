@@ -1,68 +1,104 @@
 # ------------------------------------------------------------------
-# Tiny‑GPU run (8 GB RTX 3060 Ti) – PPO + LoRA on KernelBench prompts
+# Tiny‑GPU GRPO run on KernelBench (Qwen‑0.5B‑Chat + LoRA r16)
 # ------------------------------------------------------------------
-
 defaults:
-  - ppo_trainer        # ← your local ppo_trainer.yaml
+  - ppo_trainer          # your local conf/ppo_trainer.yaml
   - _self_
 
-# -------------- Ray cluster ---------------------------------------
+# ---------- Ray ---------------------------------------------------
 ray_init:
   num_cpus: 4
   num_gpus: 1
 
-# -------------- Policy / model ------------------------------------
+# ---------- Model & vLLM ------------------------------------------
 policy:
-  # all three keys cover every alias that ppo_trainer might reference
+  # hard‑set every alias the trainer might dereference
+  _delete_: true
   path: "Qwen/Qwen1.5-0.5B-Chat"
   tokenizer_path: "Qwen/Qwen1.5-0.5B-Chat"
   model_name: "Qwen/Qwen1.5-0.5B-Chat"
   model_name_or_path: "Qwen/Qwen1.5-0.5B-Chat"
   pretrained_model_name: "Qwen/Qwen1.5-0.5B-Chat"
-
   vllm:
-    dtype: "float16"          # fp16 weights
-    quantization: "awq"       # 4‑bit (vLLM’s fast path)
+    dtype: float16
+    quantization: awq
     enforce_eager: true
     trust_remote_code: true
 
-# -------------- LoRA adaptor --------------------------------------
+# ---------- LoRA ---------------------------------------------------
 lora:
   r: 16
   alpha: 32
   target_modules: ["q_proj", "k_proj", "v_proj"]
 
-# -------------- Rollout worker (sglang) ---------------------------
+# ---------- Rollout actor (sglang) ---------------------------------
 actor_rollout_ref:
+  _delete_: true                    # nuke template subtree
+  hybrid_engine: true
+  model:
+    path: "Qwen/Qwen1.5-0.5B-Chat"
+    tokenizer_path: "Qwen/Qwen1.5-0.5B-Chat"
+    trust_remote_code: true
+    enable_gradient_checkpointing: true
+    lora_rank: 0
   actor:
-    name: "sglang"
-    use_torch_compile: false     # tiny GPU → keep compile off
+    name: sglang
+    use_torch_compile: false
     multi_turn: true
     max_new_tokens: 512
     n_history: 4
     tools_config_file: "tools/kernel_tool.yaml"
 
-# -------------- PPO hyper‑params ----------------------------------
+    # GRPO–specific knobs
+    ppo_mini_batch_size: 256
+    ppo_epochs: 1
+    loss_agg_mode: token-mean
+    use_kl_loss: true
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+
+  ref:
+    strategy: fsdp
+    use_torch_compile: false
+    fsdp_config:
+      wrap_policy:
+        min_num_params: 0
+
+# ---------- Remove critic (not used in GRPO) -----------------------
+critic:
+  _delete_: true
+
+# ---------- GRPO algorithm ----------------------------------------
 algorithm:
+  adv_estimator: grpo          # GRPO instead of PPO/GAE
   gamma: 0.4
+  lam: 1.0
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+  kl_penalty: kl
+  kl_ctrl:
+    type: fixed
+    kl_coef: 0.001
+    horizon: 10000
+    target_kl: 0.1
   clip_range: 0.2
   vf_coef: 1.0
   learning_rate: 5e-5
-  rollout_batch_size: 2
+  rollout_batch_size: 2        # tiny batches for 8 GB card
 
-# -------------- Reward --------------------------------------------
+# ---------- Custom reward -----------------------------------------
 custom_reward_function:
-  path: "kevin_reward.py"
-  name: "compute_score"
+  path: kevin_reward.py
+  name: compute_score
 
-# -------------- Dataset -------------------------------------------
+# ---------- Dataset ------------------------------------------------
 data_module:
   _target_: verl.data.jsonl.JsonlDataModule
-  path: "data/kernelbench_train.jsonl"
-  text_key: "prompt"
+  path: data/kernelbench_train.jsonl
+  text_key: prompt
   batch_size: 1
 
-# -------------- Environment vars passed to actors -----------------
+# ---------- Misc env ----------------------------------------------
 env:
   GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
 
