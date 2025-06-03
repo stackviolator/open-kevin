@@ -1,0 +1,51 @@
+# ---------------------------------------------------------------
+# Inherit everything veRL needs, then patch the tiny‑GPU tweaks.
+# ---------------------------------------------------------------
+defaults:
+  - trainer: ppo                     # veRL’s built‑in PPO base
+  - _self_
+
+# ---------- tiny overrides -------------------------------------
+ray_init:
+  num_cpus: 4                       # or fewer if host is small
+  num_gpus: 1
+
+policy:
+  model_name: "Qwen/Qwen1.5-0.5B-Chat"
+  vllm:
+    dtype: "float16"
+    quantization: "awq"
+    enforce_eager: true
+    trust_remote_code: true
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: ["q_proj", "k_proj", "v_proj"]
+
+rollout_actor:
+  multi_turn: true
+  max_new_tokens: 512
+  n_history: 4
+  tools_config_file: "tools/kernel_tool.yaml"
+
+algorithm:
+  gamma: 0.4
+  clip_range: 0.2
+  vf_coef: 1.0
+  learning_rate: 5e-5
+  rollout_batch_size: 2
+
+custom_reward_function:
+  path: "kevin_reward.py"
+  name: "compute_score"
+
+data_module:
+  _target_: verl.data.jsonl.JsonlDataModule
+  path: "data/kernelbench_train.jsonl"
+  text_key: "prompt"
+  batch_size: 1
+
+env:
+  GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
+
