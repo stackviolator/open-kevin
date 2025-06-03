@@ -33,3 +33,13 @@ custom_reward_function:
 # Export the reset command to subprocesses
 env:
   GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
+
+# -----------------------------------------------------------------
+# dataset feeding the rollout actors
+# -----------------------------------------------------------------
+data_module:
+  _target_: verl.data.jsonl.JsonlDataModule          # built‑in
+  path: "data/kernelbench_train.jsonl"
+  text_key: "prompt"                                 # field name in JSONL
+  batch_size: 1                                      # one trajectory per job
+
