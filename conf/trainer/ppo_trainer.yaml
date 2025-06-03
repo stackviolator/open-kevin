@@ -156,7 +156,7 @@ critic:
     total_training_steps: -1  # must be override by program
     weight_decay: 0.01
   model:
-    path: ~/models/deepseek-llm-7b-chat
+    path: "Qwen/Qwen3-4B"
     use_shm: False
     tokenizer_path: ${actor_rollout_ref.model.path}
     override_config: { }
