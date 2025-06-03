@@ -5,10 +5,9 @@ tools:
     tool_schema:
       name: "kernel_bench"
       description: |
-        Compile + run a CUDA kernel and return JSON with {
-          ok: bool, compile_ms: float, runtime_ms: float,
-          best_runtime_ms: float | null, log: str
-        }
+        Compile + run a CUDA kernel in a sandbox and return JSON with keys:
+          ok, compile_ms, runtime_ms, best_runtime_ms (optional), log,
+          timeout (bool, optional), rejected (bool, optional)
       parameters:
         type: object
         properties:
