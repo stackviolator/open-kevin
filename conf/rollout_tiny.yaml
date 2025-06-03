@@ -1,9 +1,7 @@
-# --- inherit the built‑in PPO template -------------------------
 defaults:
-  - trainer/ppo_trainer         # ← correct group name
+  - ppo_trainer          # <- points to conf/ppo_trainer.yaml you copied
   - _self_
 
-# --- your tiny‑GPU overrides ----------------------------------
 ray_init:
   num_cpus: 4
   num_gpus: 1
@@ -21,11 +19,14 @@ lora:
   alpha: 32
   target_modules: ["q_proj", "k_proj", "v_proj"]
 
-rollout_actor:
-  multi_turn: true
-  max_new_tokens: 512
-  n_history: 4
-  tools_config_file: "tools/kernel_tool.yaml"
+actor_rollout_ref:
+  actor:
+    name: "sglang"
+    use_torch_compile: false
+    multi_turn: true
+    max_new_tokens: 512
+    n_history: 4
+    tools_config_file: "tools/kernel_tool.yaml"
 
 algorithm:
   gamma: 0.4
