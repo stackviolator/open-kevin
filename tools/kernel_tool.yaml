@@ -1,7 +1,7 @@
 # Registers KernelBenchTool so SGLang + Verl can invoke it.
 
 tools:
-  - class_name: my_kernel_tool.KernelBenchTool
+  - class_name: kernel_tool.KernelBenchTool
     tool_schema:
       name: "kernel_bench"
       description: |

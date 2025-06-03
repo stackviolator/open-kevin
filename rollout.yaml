@@ -30,5 +30,5 @@ algorithm:
   rollout_batch_size: 8        # per‑actor traj per update
 
 custom_reward_function:
-  path: "my_reward.py"
+  path: "kevin_reward.py"
   name: "compute_score"
