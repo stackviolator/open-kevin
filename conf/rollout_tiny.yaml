@@ -1,33 +1,46 @@
+# ------------------------------------------------------------------
+# Tiny‑GPU run (8 GB RTX 3060 Ti) – PPO + LoRA on KernelBench prompts
+# ------------------------------------------------------------------
+
 defaults:
-  - ppo_trainer          # <- points to conf/ppo_trainer.yaml you copied
+  - ppo_trainer        # ← your local ppo_trainer.yaml
   - _self_
 
+# -------------- Ray cluster ---------------------------------------
 ray_init:
   num_cpus: 4
   num_gpus: 1
 
+# -------------- Policy / model ------------------------------------
 policy:
+  # all three keys cover every alias that ppo_trainer might reference
   model_name: "Qwen/Qwen1.5-0.5B-Chat"
+  model_name_or_path: "Qwen/Qwen1.5-0.5B-Chat"
+  pretrained_model_name: "Qwen/Qwen1.5-0.5B-Chat"
+
   vllm:
-    dtype: "float16"
-    quantization: "awq"
+    dtype: "float16"          # fp16 weights
+    quantization: "awq"       # 4‑bit (vLLM’s fast path)
     enforce_eager: true
     trust_remote_code: true
 
+# -------------- LoRA adaptor --------------------------------------
 lora:
   r: 16
   alpha: 32
   target_modules: ["q_proj", "k_proj", "v_proj"]
 
+# -------------- Rollout worker (sglang) ---------------------------
 actor_rollout_ref:
   actor:
     name: "sglang"
-    use_torch_compile: false
+    use_torch_compile: false     # tiny GPU → keep compile off
     multi_turn: true
     max_new_tokens: 512
     n_history: 4
     tools_config_file: "tools/kernel_tool.yaml"
 
+# -------------- PPO hyper‑params ----------------------------------
 algorithm:
   gamma: 0.4
   clip_range: 0.2
@@ -35,16 +48,19 @@ algorithm:
   learning_rate: 5e-5
   rollout_batch_size: 2
 
+# -------------- Reward --------------------------------------------
 custom_reward_function:
   path: "kevin_reward.py"
   name: "compute_score"
 
+# -------------- Dataset -------------------------------------------
 data_module:
   _target_: verl.data.jsonl.JsonlDataModule
   path: "data/kernelbench_train.jsonl"
   text_key: "prompt"
   batch_size: 1
 
+# -------------- Environment vars passed to actors -----------------
 env:
   GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
 
