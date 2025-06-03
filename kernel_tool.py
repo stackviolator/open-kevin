@@ -51,14 +51,19 @@ class KernelBenchTool(BaseTool):
     name = "kernel_bench"
 
     def __init__(self, config: dict | None = None, tool_schema: dict | None = None):
-        # Provide minimal fallbacks so plain `KernelBenchTool()` works in tests
+        # Allow bare instantiation in unit tests where Verl isn’t wiring a
+        # full OpenAIFunctionToolSchema. Fall back to a minimal stub.
         config = config or {}
         tool_schema = tool_schema or {"name": self.name}
-        super().__init__(config, tool_schema)
+        try:
+            super().__init__(config, tool_schema)  # normal Verl runtime path
+        except AttributeError:  # unit‑test path (dict lacks .function)
+            self.config = config
+            self.name = tool_schema.get("name", self.name)
         self.best_runtime_ms: float | None = None
 
     # ------------------------------------------------------------------
-    # safety guards -----------------------------------------------------
+    # safety guards ----------------------------------------------------- -----------------------------------------------------
     # ------------------------------------------------------------------
     _GRID_RE = re.compile(r"<<<\((.*?)\)>>>", re.S)
 
