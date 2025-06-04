@@ -27,6 +27,7 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.rollout.n=1 \
    actor_rollout_ref.actor.loss_agg_mode=token-mean \
    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
+   actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
    actor_rollout_ref.actor.fsdp_config.param_offload=True \
    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
    actor_rollout_ref.actor.use_kl_loss=True \
@@ -40,7 +41,7 @@ python3 -m verl.trainer.main_ppo \
    algorithm.kl_ctrl.type=fixed \
    algorithm.kl_ctrl.kl_coef=0.02 \
    algorithm.kl_ctrl.target_kl=0.1 \
-   custom_reward_function.path=kevin_reward \
+   custom_reward_function.path=kevin_reward.py \
    custom_reward_function.name=compute_score \
    trainer.project_name=kevin-grpo \
    trainer.experiment_name=kevin-grpo-$MODEL_PATH-lora \

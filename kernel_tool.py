@@ -9,7 +9,6 @@ CUDA_RESET_CMD = os.getenv("GPU_RESET_CMD", "nvidia-smi --gpu-reset -i 0")
 TIMEOUT_S = 3
 GRID_LIMIT = 1024            # reject blocks > 1024 threads in any dim
 
-
 def _nvcc_compile_run(code: str) -> Dict[str, float | str | bool]:
     """Helper that *must* run inside a child proc; compiles & launches kernel."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -39,7 +38,6 @@ def _nvcc_compile_run(code: str) -> Dict[str, float | str | bool]:
             "compile_ms": compile_ms,
             "runtime_ms": runtime_ms,
         }
-
 
 class KernelBenchTool(BaseTool):
     """Compile + run LLM‑generated CUDA kernels with sandboxing & watchdog.
@@ -97,7 +95,7 @@ class KernelBenchTool(BaseTool):
 
     # ------------------------------------------------------------------
     # public tool interface --------------------------------------------
-    # ------------------------------------------------------------------ --------------------------------------------
+    # ------------------------------------------------------------------
     # ------------------------------------------------------------------
     def __call__(self, code: str, **_) -> str:
         res = self._safe_launch(code)
@@ -108,7 +106,6 @@ class KernelBenchTool(BaseTool):
                 self.best_runtime_ms = rt
             res["best_runtime_ms"] = self.best_runtime_ms
         return json.dumps(res)
-
 
 # ----------------------------------------------------------------------
 # util -----------------------------------------------------------------
