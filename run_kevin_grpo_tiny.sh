@@ -2,7 +2,7 @@
 
 set -x
 
-MODEL_PATH=Qwen/Qwen2.5-0.5B-Instruct
+export MODEL_PATH=Qwen/Qwen2.5-0.5B-Instruct
 DATA_PATH=./
 VLLM_KV_CPU_OFFLOAD=1 # slow af but need for my tiny gpu 
 
