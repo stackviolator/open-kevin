@@ -46,7 +46,6 @@ python3 -m verl.trainer.main_ppo \
    trainer.project_name=kevin-grpo \
    trainer.experiment_name=kevin-grpo-$MODEL_PATH-lora \
    trainer.total_epochs=4 \
-   trainer.global_batch_size=16 \
    trainer.nnodes=1 \
    trainer.n_gpus_per_node=1 \
    trainer.save_freq=20 \
