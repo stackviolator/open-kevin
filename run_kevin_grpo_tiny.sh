@@ -2,14 +2,17 @@
 
 set -x
 
+MODEL_PATH=Qwen/Qwen2.5-0.5B-Instruct
+DATA_PATH=./
+
 python3 -m verl.trainer.main_ppo \
-   data.train_files=data/kernelbench_train.parquet \
-   data.val_files=data/kernelbench_holdout.parquet \
+   data.train_files=$DATA_PATH/data/kernelbench_train.parquet \
+   data.val_files=$DATA_PATH/data/kernelbench_holdout.parquet \
    data.prompt_key=prompt \
    data.train_batch_size=16 \
    data.max_prompt_length=1024 \
    data.max_response_length=1024 \
-   actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
+   actor_rollout_ref.model.path=$MODEL_PATH \
    actor_rollout_ref.model.lora_rank=16 \
    actor_rollout_ref.model.lora_alpha=16 \
    actor_rollout_ref.model.target_modules=all-linear \
@@ -24,8 +27,14 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.rollout.top_p=0.9 \
    actor_rollout_ref.rollout.n=1 \
    actor_rollout_ref.actor.loss_agg_mode=token-mean \
+   actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
    actor_rollout_ref.actor.fsdp_config.param_offload=True \
    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
+   actor_rollout_ref.actor.use_kl_loss=True \
+   actor_rollout_ref.actor.kl_loss_coef=0.001 \
+   actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+   actor_rollout_ref.actor.entropy_coeff=0 \
+   actor_rollout_ref.actor.strategy=fsdp2 \
    algorithm.adv_estimator=grpo \
    algorithm.use_kl_in_reward=False \
    algorithm.kl_penalty=kl \
@@ -35,9 +44,11 @@ python3 -m verl.trainer.main_ppo \
    custom_reward_function.path=kevin_reward \
    custom_reward_function.name=compute_score \
    trainer.project_name=kevin-grpo \
-   trainer.experiment_name=kevin-grpo-qwen0.5b-lora \
+   trainer.experiment_name=kevin-grpo-$MODEL_PATH-lora \
    trainer.total_epochs=4 \
-   trainer.micro_batch_size_per_gpu=1 \
    trainer.global_batch_size=16 \
-   trainer.default_hdfs_dir=hdfs://user/verl/experiments/kevin_grpo_lora/ \
+   trainer.nnodes=1 \
+   trainer.n_gpus_per_node=1 \
+   trainer.save_freq=20 \
+   trainer.test_freq=5 \
    trainer.logger=['console','wandb'] $@ 
