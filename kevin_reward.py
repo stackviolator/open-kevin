@@ -3,14 +3,12 @@ import json
 GAMMA = 0.4
 BASE_BONUS = 0.3
 
-
 def _speed_score(runtime_ms: float, best_so_far: float | None) -> float:
     if runtime_ms <= 0:
         return 0.0
     if best_so_far is None:
         return 1.0 / runtime_ms
     return best_so_far / runtime_ms
-
 
 def compute_score(prompt, responses, *, turn_id: int, tool_result: str | None = None, **_):
     if tool_result is None:

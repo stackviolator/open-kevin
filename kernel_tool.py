@@ -99,8 +99,8 @@ class KernelBenchTool(BaseTool):
     # public tool interface --------------------------------------------
     # ------------------------------------------------------------------ --------------------------------------------
     # ------------------------------------------------------------------
-    def __call__(self, query: str, **_) -> str:
-        res = self._safe_launch(query)
+    def __call__(self, code: str, **_) -> str:
+        res = self._safe_launch(code)
         # best‑runtime bookkeeping
         if res.get("ok") and res.get("runtime_ms") is not None:
             rt = res["runtime_ms"]
