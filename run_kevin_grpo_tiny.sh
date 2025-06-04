@@ -4,6 +4,7 @@ set -x
 
 MODEL_PATH=Qwen/Qwen2.5-0.5B-Instruct
 DATA_PATH=./
+VLLM_KV_CPU_OFFLOAD=1 # slow af but need for my tiny gpu 
 
 python3 -m verl.trainer.main_ppo \
    data.train_files=$DATA_PATH/data/kernelbench_train.parquet \
@@ -37,6 +38,7 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
    actor_rollout_ref.actor.entropy_coeff=0 \
    actor_rollout_ref.actor.strategy=fsdp2 \
+   actor_rollout_ref.actor.fsdp_config.activation_checkpointing=True \
    algorithm.adv_estimator=grpo \
    algorithm.use_kl_in_reward=False \
    algorithm.kl_penalty=kl \
