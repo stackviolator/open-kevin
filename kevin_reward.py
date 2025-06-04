@@ -1,4 +1,4 @@
-"""Kevin‑style discounted reward with extra checks for sandbox flags."""
+"""Kevin-style discounted reward with extra checks for sandbox flags."""
 import json
 GAMMA = 0.4
 BASE_BONUS = 0.3

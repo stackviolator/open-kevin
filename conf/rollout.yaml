@@ -1,45 +1,48 @@
+# conf/rollout.yaml (Qwen3-4B, full finetune)
 actor_rollout_ref:
+  model:
+    partial_pretrain: Qwen/Qwen3-4B
   rollout:
     name: "sglang"
     multi_turn: true
-    tool_kwargs:
-      tools_config_file: "tools/kernel_tool.yaml"
-    context_postprocessor:
-      _target_: verl.utils.context_reducer.retain_last_n
-      n: 6
-    val_kwargs:
-      max_new_tokens: 2048
-    engine_kwargs:
-      vllm:
-        enforce_eager: true
-  model:
-    path: "Qwen/Qwen3-4B"
+    format: "chatml"
+    tool_config_path: "tools/kernel_tool.yaml"
+    temperature: 0.7
+    top_p: 0.9
+    n: 1
+  ref:
+    model:
+      partial_pretrain: Qwen/Qwen3-4B
 
-n_actors: 4
+data:
+  train_files: "data/kernelbench_train.parquet"
+  val_files:   "data/kernelbench_holdout.parquet"
+  prompt_key:  "prompt"
+  train_batch_size: 16
+  max_prompt_length: 1024
+  max_response_length: 1024
 
+# —— GRPO‑specific knobs ——
 algorithm:
-  name: ppo
-  gamma: 0.4
   adv_estimator: grpo
-  clip_range: 0.2
-  vf_coef: 1.0
-  learning_rate: 1e-5
-  rollout_batch_size: 8
+  use_kl_in_reward: false
+  kl_penalty: kl
+  kl_ctrl:
+    type: fixed
+    kl_coef: 0.02
+    target_kl: 0.1
+  actor_rollout_ref:
+    actor:
+      loss_agg_mode: token-mean
 
-custom_reward_function:
-  path: "kevin_reward.py"
-  name: "compute_score"
+reward_model:
+  module_path: "kevin_reward.compute_score"
 
-# Export the reset command to subprocesses
-env:
-  GPU_RESET_CMD: "nvidia-smi --gpu-reset -i 0"
-
-# -----------------------------------------------------------------
-# dataset feeding the rollout actors
-# -----------------------------------------------------------------
-data_module:
-  _target_: verl.data.jsonl.JsonlDataModule          # built‑in
-  path: "data/kernelbench_train.jsonl"
-  text_key: "prompt"                                 # field name in JSONL
-  batch_size: 1                                      # one trajectory per job
-
+trainer:
+  project_name: "kevin-grpo"
+  experiment_name: "kevin-multiturn-grpo-qwen3-4b"
+  total_epochs: 4
+  micro_batch_size_per_gpu: 4
+  global_batch_size: 64
+  default_hdfs_dir: "hdfs://user/verl/experiments/kevin_grpo/"
+  logger: ["console", "wandb"]
