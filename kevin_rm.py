@@ -36,9 +36,6 @@ class KevinRewardManager(NaiveRewardManager):
         rewards = []
         for item in data_proto:
             r = compute_score(
-                prompt=item.non_tensor_batch["prompt"],
-                response=item.non_tensor_batch["response_text"],
-                turn_id=item.non_tensor_batch.get("turn_id", 0),
                 tool_result=item.non_tensor_batch.get("tool_result"),
             )
             rewards.append(r)
