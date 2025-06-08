@@ -18,12 +18,21 @@ holdout_idx  = set(indices[:20])
 train, test = [], []
 for i in range(len(ds)):
     ex = ds[i]
+    
+    # Create chat-formatted prompt for sglang multi-turn tool interactions
+    prompt_content = (
+        "Write a correct and fast CUDA kernel to replace the following "
+        f"PyTorch operator:\n```python\n{ex['code']}\n```"
+    )
+    
     record = {
         "task_id": ex.get("task_id", f"kb_{i:03d}"),
-        "prompt": (
-            "Write a correct and fast CUDA kernel to replace the following "
-            f"PyTorch operator:\n```python\n{ex['code']}\n```"
-        ),
+        "prompt": [
+            {
+                "role": "user",
+                "content": prompt_content
+            }
+        ],
         "meta": {
             "name": ex["name"],
             "level": ex["level"],

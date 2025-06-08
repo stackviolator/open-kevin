@@ -43,13 +43,13 @@ class KernelBenchTool(BaseTool):
     """Compile + run LLM‑generated CUDA kernels with sandboxing & watchdog.
 
     Accepts optional `config` and `tool_schema` so it can be instantiated
-    *both* by Verl’s dynamic loader **and** directly in unit tests.
+    *both* by Verl's dynamic loader **and** directly in unit tests.
     """
 
     name = "kernel_bench"
 
     def __init__(self, config: dict | None = None, tool_schema: dict | None = None):
-        # Allow bare instantiation in unit tests where Verl isn’t wiring a
+        # Allow bare instantiation in unit tests where Verl isn't wiring a
         # full OpenAIFunctionToolSchema. Fall back to a minimal stub.
         config = config or {}
         tool_schema = tool_schema or {"name": self.name}
@@ -61,7 +61,7 @@ class KernelBenchTool(BaseTool):
         self.best_runtime_ms: float | None = None
 
     # ------------------------------------------------------------------
-    # safety guards ----------------------------------------------------- -----------------------------------------------------
+    # safety guards 
     # ------------------------------------------------------------------
     _GRID_RE = re.compile(r"<<<\((.*?)\)>>>", re.S)
 
@@ -112,7 +112,7 @@ class KernelBenchTool(BaseTool):
 # ----------------------------------------------------------------------
 
 def _maybe_gpu_reset():
-    """Try to reset the GPU so the next rollout isn’t wedged."""
+    """Try to reset the GPU so the next rollout isn't wedged."""
     try:
         subprocess.run(CUDA_RESET_CMD.split(), timeout=5)
     except Exception:
