@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 import math, torch, json
 
-from verl.workers.reward_manager.base import BaseRewardManager
+from verl.reward_manager.base import BaseRewardManager
 
 # ────────────────────────────────────────────────────────────
 # your existing reward helper
