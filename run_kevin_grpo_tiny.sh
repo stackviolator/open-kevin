@@ -14,13 +14,8 @@ python3 -m verl.trainer.main_ppo \
    data.max_prompt_length=512 \
    data.max_response_length=512 \
    actor_rollout_ref.model.path=$MODEL_PATH \
-   actor_rollout_ref.model.lora_rank=16 \
-   actor_rollout_ref.model.lora_alpha=16 \
-   actor_rollout_ref.model.target_modules=all-linear \
    actor_rollout_ref.model.enable_gradient_checkpointing=True \
-   actor_rollout_ref.rollout.name=vllm \
-   actor_rollout_ref.rollout.load_format=safetensors \
-   actor_rollout_ref.rollout.layered_summon=True \
+   actor_rollout_ref.rollout.name=sglang \
    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
    actor_rollout_ref.rollout.multi_turn.enable=True \
    actor_rollout_ref.rollout.multi_turn.format=chatml \
@@ -51,7 +46,7 @@ python3 -m verl.trainer.main_ppo \
    custom_reward_function.path=kevin_reward.py \
    custom_reward_function.name=compute_score \
    trainer.project_name=kevin-grpo \
-   trainer.experiment_name=kevin-grpo-$MODEL_PATH-lora \
+   trainer.experiment_name=kevin-grpo-$MODEL_PATH-sglang \
    trainer.total_epochs=4 \
    trainer.nnodes=1 \
    trainer.n_gpus_per_node=1 \
