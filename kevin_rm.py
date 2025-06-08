@@ -1,12 +1,9 @@
 # tools/kevin_rm.py
 from __future__ import annotations
-from typing import Dict, Any
-import math, torch, json
-
+import json, torch
+from typing import Any
 from verl.workers.reward_manager import NaiveRewardManager
 
-# ────────────────────────────────────────────────────────────
-# your existing reward helper
 GAMMA, BASE_BONUS = 0.4, 0.3
 
 def _speed_score(rt_ms: float, best: float | None) -> float:
@@ -19,7 +16,7 @@ def compute_score(prompt: str,
                   *,
                   turn_id: int,
                   tool_result: str | None = None,
-                  **_unused) -> float:
+                  **_) -> float:
     if tool_result is None:
         return 0.0
     t = json.loads(tool_result)
@@ -28,36 +25,24 @@ def compute_score(prompt: str,
     reward = BASE_BONUS + _speed_score(t["runtime_ms"], t.get("best_runtime_ms"))
     return reward / (1 - GAMMA)
 
-# ────────────────────────────────────────────────────────────
 class KevinRewardManager(NaiveRewardManager):
-    """
-    Minimal RM that needs no ground‑truth.
-    Logs `mean_reward` every validation epoch.
-    """
+    """Rule‑based RM that needs no ground‑truth column."""
+    def __init__(self, tokenizer, num_examine: int = 0, compute_score=compute_score):
+        super().__init__(tokenizer=tokenizer,
+                         num_examine=num_examine,
+                         compute_score=compute_score)
 
-    def __init__(self, cfg: Dict[str, Any] | None = None):
-        super().__init__(cfg or {})
-        self.reset_metrics()          # <- init accumulators
-
-    # called for *every* training example
-    def __call__(self, item, return_dict: bool = False):
-        r = compute_score(
-            prompt      = item.prompt,
-            response    = item.response,
-            turn_id     = item.turn_id,
-            tool_result = item.non_tensor_batch.get("tool_result"),
-        )
+    def __call__(self, data_proto, return_dict: bool = False):
+        rewards = []
+        for item in data_proto:
+            r = compute_score(
+                prompt=item.non_tensor_batch["prompt"],
+                response=item.non_tensor_batch["response_text"],
+                turn_id=item.non_tensor_batch.get("turn_id", 0),
+                tool_result=item.non_tensor_batch.get("tool_result"),
+            )
+            rewards.append(r)
+        reward_tensor = torch.tensor(rewards, dtype=torch.float32)
         if return_dict:
-            return {"reward": r}
-        return r
-
-    # ── validation bookkeeping ──
-    def reset_metrics(self):
-        self._cum, self._cnt = 0.0, 0
-
-    def add_val_result(self, reward: float):
-        self._cum += reward
-        self._cnt += 1
-
-    def gather_val_metrics(self) -> Dict[str, float]:
-        return {"mean_reward": self._cum / self._cnt if self._cnt else math.nan}
+            return reward_tensor, {"mean_reward": reward_tensor.mean().item()}
+        return reward_tensor
