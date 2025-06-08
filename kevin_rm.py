@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 import math, torch, json
 
-from verl.reward_manager.base import BaseRewardManager
+from verl.workers.reward_manager import NaiveRewardManager
 
 # ────────────────────────────────────────────────────────────
 # your existing reward helper
@@ -29,7 +29,7 @@ def compute_score(prompt: str,
     return reward / (1 - GAMMA)
 
 # ────────────────────────────────────────────────────────────
-class KevinRewardManager(BaseRewardManager):
+class KevinRewardManager(NaiveRewardManager):
     """
     Minimal RM that needs no ground‑truth.
     Logs `mean_reward` every validation epoch.
