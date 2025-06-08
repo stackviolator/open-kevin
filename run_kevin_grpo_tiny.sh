@@ -21,6 +21,7 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.rollout.name=vllm \
    actor_rollout_ref.rollout.load_format=safetensors \
    actor_rollout_ref.rollout.layered_summon=True \
+   actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
    actor_rollout_ref.rollout.multi_turn.enable=True \
    actor_rollout_ref.rollout.multi_turn.format=chatml \
    actor_rollout_ref.rollout.multi_turn.tool_config_path=tools/kernel_tool.yaml \
