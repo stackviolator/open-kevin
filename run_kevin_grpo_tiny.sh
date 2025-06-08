@@ -48,8 +48,8 @@ python3 -m verl.trainer.main_ppo \
    algorithm.kl_ctrl.target_kl=0.1 \
    reward_model.enable=False \
    reward_model.reward_manager=custom \
-   custom_cls.path=kevin_rm.py \
-   custom_cls.name=KevinRewardManager \
+   reward_model.custom_cls.path=kevin_rm.py \
+   reward_model.custom_cls.name=KevinRewardManager \
    trainer.project_name=kevin-grpo \
    trainer.experiment_name=kevin-grpo-$MODEL_PATH-lora \
    trainer.total_epochs=4 \
