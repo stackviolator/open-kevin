@@ -10,7 +10,7 @@ def _speed_score(runtime_ms: float, best_so_far: float | None) -> float:
         return 1.0 / runtime_ms
     return best_so_far / runtime_ms
 
-def compute_score(prompt, responses, *, turn_id: int, tool_result: str | None = None, **_):
+def compute_score(tool_result: str | None = None, **_):
     if tool_result is None:
         return 0.0
     data = json.loads(tool_result)
