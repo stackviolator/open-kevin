@@ -46,7 +46,8 @@ python3 -m verl.trainer.main_ppo \
    algorithm.kl_ctrl.type=fixed \
    algorithm.kl_ctrl.kl_coef=0.02 \
    algorithm.kl_ctrl.target_kl=0.1 \
-   reward_model.enable=False \
+   reward_model.enable=False\
+   reward_model.reward_manager=kevin \
    custom_reward_function.path=kevin_reward.py \
    custom_reward_function.name=compute_score \
    trainer.project_name=kevin-grpo \

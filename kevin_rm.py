@@ -35,6 +35,8 @@ class KevinRewardManager(NaiveRewardManager):
     def __call__(self, data_proto, return_dict: bool = False):
         rewards = []
         for item in data_proto:
+            print(data_proto.keys())
+            print(item)
             r = compute_score(
                 tool_result=item.non_tensor_batch.get("tool_result"),
             )
