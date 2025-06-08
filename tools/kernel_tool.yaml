@@ -2,6 +2,7 @@
 
 tools:
   - class_name: kernel_tool.KernelBenchTool
+    config: {}
     tool_schema:
       type: "function"
       function:
