@@ -11,8 +11,8 @@ python3 -m verl.trainer.main_ppo \
    data.val_files=$DATA_PATH/data/kernelbench_holdout.parquet \
    data.prompt_key=prompt \
    data.train_batch_size=4 \
-   data.max_prompt_length=512 \
-   data.max_response_length=512 \
+   data.max_prompt_length=1024 \
+   data.max_response_length=1024 \
    data.return_raw_chat=True \
    actor_rollout_ref.model.path=$MODEL_PATH \
    actor_rollout_ref.model.enable_gradient_checkpointing=True \
