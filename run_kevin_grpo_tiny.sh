@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -x
+
 export CUDA_VISIBLE_DEVICES=0,1
 export MODEL_PATH=Qwen/Qwen2.5-3B-Instruct
 DATA_PATH=./
 
 python3 -m verl.trainer.main_ppo \
-    # ===== data =====
     data.train_files=$DATA_PATH/data/kernelbench_train.parquet \
     data.val_files=$DATA_PATH/data/kernelbench_holdout.parquet \
     data.prompt_key=prompt \
@@ -13,7 +13,6 @@ python3 -m verl.trainer.main_ppo \
     data.max_prompt_length=1024 \
     data.max_response_length=1024 \
     data.return_raw_chat=True \
-    # ===== model / rollout =====
     actor_rollout_ref.model.path=$MODEL_PATH \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.rollout.name=sglang \
@@ -35,15 +34,13 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.entropy_coeff=0 \
     actor_rollout_ref.actor.strategy=fsdp2 \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False
-    # ===== algorithm =====
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.kl_penalty=kl \
     algorithm.kl_ctrl.type=fixed \
     algorithm.kl_ctrl.kl_coef=0.02 \
     algorithm.kl_ctrl.target_kl=0.1 \
-    # ===== trainer =====
     trainer.project_name=kevin-grpo \
     trainer.experiment_name=kevin-grpo-$MODEL_PATH-sglang \
     trainer.total_epochs=4 \
@@ -51,4 +48,6 @@ python3 -m verl.trainer.main_ppo \
     trainer.n_gpus_per_node=2 \
     trainer.save_freq=20 \
     trainer.val_before_train=False \
-    trainer.logger=['console','wandb'] $@
+    trainer.logger=['console','wandb'] \
+    "$@"
+
