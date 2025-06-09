@@ -54,6 +54,8 @@ def compute_score(                           # ← same signature as before
         return 0.0
 
     # ---------------- step 2/3: compilation + correctness ----------------
+    print(f"Reference code: {reference_code}")
+    print(f"CUDA code: {cuda_src}")
     kb_result: KernelExecResult = eval_kernel_against_ref(
         original_model_src=reference_code,
         custom_model_src=cuda_src,
