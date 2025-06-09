@@ -76,24 +76,106 @@ def _safe_launch(code: str) -> Dict[str, float | str | bool]:
         return {"ok": False, "log": "timeout", "timeout": True}
     return q.get()
 
+def _instrument_pytorch_code(code: str) -> str | None:
+    """Instruments PyTorch code with a timing decorator for precise measurement."""
+    # Find the function definition to apply the decorator to.
+    m_def = re.search(r"def\s+(\w+)\s*\(.*\):", code, re.DOTALL)
+    if not m_def:
+        return None  # No function definition found to instrument.
+
+    def_statement = m_def.group(0)
+    # Apply the decorator to the function definition.
+    code_with_decorator = code.replace(def_statement, f"@time_this\n{def_statement}")
+
+    # The decorator and its helper variables.
+    wrapper_code = f"""
+import time
+import sys
+
+__start_time = None
+__end_time = None
+
+def time_this(func):
+    def wrapper(*args, **kwargs):
+        global __start_time, __end_time
+        # For GPU timing, we need to synchronize before starting the timer.
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+        except (ImportError, AttributeError):
+            pass  # Torch not available or no CUDA.
+        __start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        # Synchronize again after execution before stopping the timer.
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+        except (ImportError, AttributeError):
+            pass
+        __end_time = time.perf_counter()
+        return result
+    return wrapper
+"""
+
+    # Combine the wrapper, the decorated code, and the final print statement.
+    final_code = wrapper_code + "\\n" + code_with_decorator + """
+if __start_time is not None and __end_time is not None:
+    runtime_ms = (__end_time - __start_time) * 1000
+    print(str(runtime_ms), file=sys.stderr, flush=True)
+"""
+    return final_code
+
 def _run_pytorch_kernel(code: str) -> Dict[str, float | str | bool]:
-    """Runs the original pytorch kernel to get a baseline."""
+    """
+    Runs the original PyTorch kernel to get a baseline. It first tries to
+    instrument the code for precise timing and falls back to timing the
+    entire process if instrumentation fails.
+    """
+    instrumented_code = _instrument_pytorch_code(code)
+
+    if instrumented_code is None:
+        # Fallback to old method if instrumentation is not possible.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(code)
+            py_path = f.name
+        try:
+            start = time.time()
+            proc = subprocess.run(
+                ["python", py_path],
+                capture_output=True, text=True, timeout=TIMEOUT_S
+            )
+            runtime_ms = (time.time() - start) * 1e3
+            if proc.returncode != 0:
+                return {"ok": False, "log": proc.stderr}
+            return {"ok": True, "stdout": proc.stdout, "runtime_ms": runtime_ms}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "log": "timeout", "timeout": True}
+        finally:
+            os.unlink(py_path)
+
+    # Run the instrumented code.
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
+        f.write(instrumented_code)
         py_path = f.name
 
     try:
-        start = time.time()
         proc = subprocess.run(
             ["python", py_path],
             capture_output=True,
             text=True,
             timeout=TIMEOUT_S,
         )
-        runtime_ms = (time.time() - start) * 1e3
 
         if proc.returncode != 0:
             return {"ok": False, "log": proc.stderr}
+
+        # The runtime is now in stderr, and the kernel output in stdout.
+        try:
+            runtime_ms = float(proc.stderr.strip())
+        except (ValueError, IndexError):
+            return {"ok": False, "log": "Failed to parse runtime from instrumented code: " + proc.stderr}
 
         return {
             "ok": True,

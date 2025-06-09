@@ -67,7 +67,7 @@ int main() {
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
     "int main() {",
-    "int main() { for(volatile int i=0; i<50000000; ++i); "
+    "int main() { for(volatile int i=0; i<500000000; ++i); "
 )
 
 # Compiles but produces incorrect output (adds a to itself)
