@@ -84,17 +84,17 @@ class ModelNew(nn.Module):
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "int main(int argc, char* argv[]) {",
-    "int main(int argc, char* argv[]) { for(volatile int i=0; i<100000000; ++i); "
+    "__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {",
+    "__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {\n    for(volatile int i=0; i<1000000; ++i); // artificial delay"
 )
 
 # Compiles but produces incorrect output (adds a to itself)
-CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("c[idx] = a[idx] + b[idx];", "c[idx] = a[idx] + a[idx];")
+CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("out[idx] = a[idx] + b[idx];", "out[idx] = a[idx] + a[idx];")
 
 # This should cause a segmentation fault on the host
 CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace(
-    "int main(int argc, char* argv[]) {",
-    "int main(int argc, char* argv[]) { float* p = NULL; *p = 1.0f;"
+    "def forward(self, a, b):",
+    "def forward(self, a, b):\n        # This will cause a segfault\n        import ctypes\n        ctypes.string_at(0)"
 )
 
 # Code that will not compile
