@@ -22,83 +22,86 @@ _ds = ds_full.select(range(200))
 # ---------------------------------------------------------------------------
 # 📝 Prompt shown to the model during fine‑tuning / inference
 # ---------------------------------------------------------------------------
-# ⚠️  The guidance below is *precisely* aligned with `compute_score` in
-#     `test_reward.py`. Do **not** change lightly.
-# ---------------------------------------------------------------------------
 
-prompt_header = """You are an expert CUDA programmer. Your mission is to convert a given PyTorch operator into a **high‑performance** custom CUDA kernel *wrapped* inside a Python script via **`torch.utils.cpp_extension.load_inline`**.
+prompt_header = """You are given the following PyTorch architecture:
 
-**Instructions — your output must:**
-1. Analyse the provided PyTorch code.
-2. Implement the equivalent logic in a CUDA kernel (C++/CUDA).
-3. In a *single* Python script:
-   • JIT‑compile the kernel using `load_inline` (supplying both `cpp_sources` and `cuda_sources`).
-   • Expose the kernel via a subclass of `torch.nn.Module` whose `forward` method calls the compiled function.
-4. Output **only one** `<code> … </code>` block containing the full, runnable Python script — **no text** before or after the tags.
-5. Ensure your implementation is **correct** and noticeably **faster** than the baseline PyTorch operator.
+"""
 
----
+prompt_footer = """
 
-**Example (for vector addition):**
+Replace pytorch operators in the given architecture with raw CUDA kernels, 
+optimizing for performance on NVIDIA A100 (e.g. shared memory, kernel fusion, 
+warp primitives, vectorization,...). 
 
-**PyTorch Operator:**
-```python
-import torch
+Use torch.utils.cpp_extension.load_inline and name your optimized output 
+architecture ModelNew. 
 
-def vector_add(a, b):
-    return a + b
+You're not allowed to use torch.nn (except for Parameter, containers, and init). 
+The input and output have to be on CUDA device. 
 
-size = 128
-a = torch.randn(size)
-b = torch.randn(size)
-print(vector_add(a, b))
-```
+Your answer must be the complete new architecture (no testing code, no other code): 
+it will be evaluated and you will be given feedback on its correctness and speedup 
+so you can keep iterating, trying to maximize the speedup.
 
-**Your CUDA Solution:**
-<code>
-import torch
+Here's an example:
+
 import torch.nn as nn
 from torch.utils.cpp_extension import load_inline
 
-# ↳ Inline CUDA kernel & signature
-cuda_source = r'''
+# Define the custom CUDA kernel for element-wise addition
+elementwise_add_source = \"\"\"
 #include <torch/extension.h>
-__global__ void add_kernel(const float* a, const float* b, float* c, int n) {
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) c[idx] = a[idx] + b[idx];
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
 }
 
-torch::Tensor add_cuda(torch::Tensor a, torch::Tensor b) {
-    const int n = a.numel();
-    auto c = torch::empty_like(a);
-    const int threads = 256;
-    const int blocks  = (n + threads - 1) / threads;
-    add_kernel<<<blocks, threads>>>(a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(), n);
-    return c;
-}
-'''
-cpp_source = "torch::Tensor add_cuda(torch::Tensor a, torch::Tensor b);"
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
 
-add_mod = load_inline(
-    name="vector_add",
-    cpp_sources=cpp_source,
-    cuda_sources=cuda_source,
-    functions=["add_cuda"],
-    verbose=False,
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+
+    return out;
+}
+\"\"\"
+
+elementwise_add_cpp_source = (
+    "torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);"
 )
 
-class ModelNew(nn.Module):
-    def forward(self, a, b):
-        return add_mod.add_cuda(a, b)
-</code>
+# Compile the inline CUDA code for element-wise addition
+elementwise_add = load_inline(
+    name="elementwise_add",
+    cpp_sources=elementwise_add_cpp_source,
+    cuda_sources=elementwise_add_source,
+    functions=["elementwise_add_cuda"],
+    verbose=True,
+    extra_cflags=[""],
+    extra_ldflags=[""],
+)
 
----
+
+class ModelNew(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.elementwise_add = elementwise_add
+
+    def forward(self, a, b):
+        return self.elementwise_add.elementwise_add_cuda(a, b)
+
+After providing your complete ModelNew architecture, you must call calc_cuda_reward(cuda_src=<your_generated_code>) with your complete Python script as the parameter. Summarize your changes in a few sentences after the tool call.
 
 **Your Turn:**
 
-Following the same pattern, write a **correct** and **fast** inline‑CUDA solution for the operator below.
-
-**PyTorch Operator:**"""
+Optimize the following PyTorch architecture:"""
 
 # ---------------------------------------------------------------------------
 # 🔀 Train / hold‑out split (20 examples for hold‑out)
@@ -112,7 +115,7 @@ _holdout = set(np.random.choice(len(_ds), size=20, replace=False))
 train, holdout = [], []
 
 for idx, ex in enumerate(_ds):
-    prompt_content = prompt_header + f"```python\n{ex['code']}\n```"
+    prompt_content = prompt_header + f"```python\n{ex['code']}\n```" + prompt_footer
 
     record = {
         "task_id": ex.get("task_id", f"kb_{idx:03d}"),

@@ -1,7 +1,6 @@
-# reward.py
+# reward_modular.py - Example of split approach
 from __future__ import annotations
-import re
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from pathlib import Path
 
 # === kernelbench imports ===
@@ -19,42 +18,12 @@ from kernelbench.src.eval import eval_kernel_against_ref, KernelExecResult
 from kernelbench.scripts.generate_baseline_time import measure_program_time
 
 # --------------------------------------------
-# utility: extract the cuda text from <code>…</code> tags
+# Utility functions
 # --------------------------------------------
-_CODE_TAG_RE = re.compile(r"<code>(.*?)</code>", re.S)
 
-def _extract_cuda(src: str) -> str | None:
-    m = _CODE_TAG_RE.search(src)
-    return m.group(1).strip() if m else None
-
-
-# --------------------------------------------
-# the single public entry‑point
-# --------------------------------------------
-def compute_score(                           # ← same signature as before
-    reference_code: str,                     # PyTorch baseline (KernelBench “original”)
-    response: str,
-    *,
-    perf_trials: int = 100,
-    correct_trials: int = 5,
-
-) -> float:
-    """
-    score = 0.0 … 1.0
-    
-    R0  0.0  no <code> tag / empty
-    R1  0.1  fails to compile (KernelBench compiled == False)
-    R2  0.2  compiled but crashes or wrong answer (correctness == False)
-    R3  0.4  correct but slower/equal to eager baseline
-    R4  0.4–1.0 correct *and* faster – linearly mapped up to 10× speed‑up
-    """
-    # ---------------- step 1: formatting ----------------
-    cuda_src = _extract_cuda(response)
-    if not cuda_src:
-        return 0.0
-
-    # ---------------- step 2/3: compilation + correctness ----------------
-    kb_result: KernelExecResult = eval_kernel_against_ref(
+def _get_kernel_result(reference_code: str, cuda_src: str, 
+                      correct_trials: int = 5, perf_trials: int = 100) -> KernelExecResult:
+    return eval_kernel_against_ref(
         original_model_src=reference_code,
         custom_model_src=cuda_src,
         num_correct_trials=correct_trials,
@@ -62,27 +31,80 @@ def compute_score(                           # ← same signature as before
         measure_performance=True,
     )
 
-    if not kb_result.compiled:
-        return 0.1                          # R1
+# --------------------------------------------
+# Individual reward components
+# --------------------------------------------
 
-    if not kb_result.correctness:
-        return 0.2                          # R2
+def compilation_reward(reference_code: str, cuda_src: str, **kwargs) -> float:
+    """Reward for successful compilation (0.0 or 1.0)"""
+    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    return 1.0 if kb_result.compiled else 0.0
 
-    kernel_ms: float = kb_result.runtime    # mean of perf_trials
+def correctness_reward(reference_code: str, cuda_src: str, **kwargs) -> float:
+    """Reward for correctness (0.0 or 1.0)"""
+    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    return 1.0 if kb_result.correctness else 0.0
 
-    # ---------------- step 4: baseline timings ----------------
-    eager_stats: Dict[str, Any] = measure_program_time(
+def performance_reward(reference_code: str, cuda_src: str, 
+                      perf_trials: int = 100, **kwargs) -> float:
+    """Reward based on speedup (0.0 to 1.0)"""
+    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    if not kb_result.compiled or not kb_result.correctness:
+        return 0.0
+    
+    # Get baseline timing
+    eager_stats = measure_program_time(
         ref_arch_name="ref",
         ref_arch_src=reference_code,
         num_trials=perf_trials,
         use_torch_compile=False,
     )
-    eager_ms: float = eager_stats["mean"]
+    
+    speedup = eager_stats["mean"] / kb_result.runtime
+    if speedup <= 1.0:
+        return 0.0
+    
+    # Map 1× → 0.0, 10× → 1.0
+    return min((speedup - 1) / 9, 1.0)
 
-    if kernel_ms >= eager_ms:
-        return 0.3                          # R3 (correct but not faster)
+# --------------------------------------------
+# Combined reward function (weighted sum)
+# --------------------------------------------
 
-    # ---------------- step 5: reward shaping by speed‑up ----------------
-    speedup = eager_ms / kernel_ms
-    # map 1× ↦ 0.4 … 10× ↦ 1.0   (cap anything ≥10×)
-    return 0.4 + 0.6 * min((speedup - 1) / 9, 1.0)
+def compute_score_modular(
+    reference_code: str,
+    response: str,
+    *,
+    perf_trials: int = 100,
+    correct_trials: int = 5,
+    weights: Dict[str, float] = None
+) -> float:
+    """
+    Modular reward function with configurable weights
+    """
+    if weights is None:
+        # Default weights
+        weights = {
+            'compile': 0.2,     # Must compile  
+            'correct': 0.3,     # Must be correct
+            'performance': 0.5  # Performance matters most
+        }
+    
+    kwargs = {'perf_trials': perf_trials, 'correct_trials': correct_trials}
+    
+    scores = {
+        'compile': compilation_reward(reference_code, response, **kwargs),
+        'correct': correctness_reward(reference_code, response, **kwargs),
+        'performance': performance_reward(reference_code, response, **kwargs)
+    }
+    
+    # Weighted sum
+    total_score = sum(weights[component] * score 
+                     for component, score in scores.items())
+    
+    return total_score
+
+# For backward compatibility
+def compute_score(reference_code: str, response: str, **kwargs) -> float:
+    """Original interface preserved"""
+    return compute_score_modular(reference_code, response, **kwargs) 
