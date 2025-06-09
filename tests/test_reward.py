@@ -109,12 +109,12 @@ class ModelNew(nn.Module):
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {",
-    "__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {\n    for(volatile int i=0; i<1000000; ++i); // artificial delay"  # noqa: E501
+    "__global__ void diag_matmul_kernel(",
+    "__global__ void diag_matmul_kernel(\n    for(volatile int i=0; i<1000000; ++i); // artificial delay\n    ("  # noqa: E501
 )
 
-# Compiles but produces incorrect output (adds a to itself)
-CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("out[idx] = a[idx] + b[idx];", "out[idx] = a[idx] + a[idx];")
+# Compiles but produces incorrect output (multiplies by diag twice)
+CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("out[row * M + col] = diag[row] * mat[row * M + col];", "out[row * M + col] = diag[row] * diag[row] * mat[row * M + col];")
 
 # Code that will not compile
 CUDA_COMPILE_ERROR = "<code> int main() { ERROR SYNTAX; } </code>"
