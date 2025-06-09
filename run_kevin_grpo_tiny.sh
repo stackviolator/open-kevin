@@ -18,6 +18,7 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.rollout.name=sglang \
    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
    actor_rollout_ref.rollout.multi_turn.enable=True \
+   actor_rollout_ref.rollout.multi_turn.tool_config_path=conf/kevin_tool.yaml \
    actor_rollout_ref.rollout.multi_turn.format=chatml \
    actor_rollout_ref.rollout.temperature=0.7 \
    actor_rollout_ref.rollout.top_p=0.9 \
