@@ -224,28 +224,28 @@ def compute_score(original_code: str, response: str, **_) -> float:
         if not compile_result.get("ok"):
             return 0.1
 
-        # R2: Code is correct (same output as pytorch)
+        # R2: No runtime errors
         executable_path = compile_result["executable_path"]
         run_result = _safe_exec(_run_compiled_kernel, executable_path)
         if not run_result.get("ok"):
-            print(f"CUDA runtime error log:\\n{run_result.get('log')}")
             return 0.2
         pytorch_result = _run_pytorch_kernel(original_code)
         if not pytorch_result.get("ok"):
-            return 0.3
+            return 0.2
 
+        # R3: Correct output
         pytorch_runtime_ms = pytorch_result["runtime_ms"]
         reference_output = pytorch_result["stdout"]
         kernel_output = run_result.get("stdout", "")
         if not check_correctness(kernel_output, reference_output):
             return 0.3
 
-        # R3: Correct but not faster than baseline
+        # R4: Correct but not faster than baseline
         runtime_ms = run_result["runtime_ms"]
         if runtime_ms >= pytorch_runtime_ms:
             return 0.4
 
-        # R4: Correct and faster
+        # R5: Correct and faster
         speedup = pytorch_runtime_ms / runtime_ms
         # Scale reward between 0.4 and 1.0 for speedups up to 10x
         return 0.4 + 0.6 * min((speedup - 1) / 9, 1)
