@@ -43,8 +43,11 @@ Your answer must be the complete new architecture (no testing code, no other cod
 it will be evaluated and you will be given feedback on its correctness and speedup 
 so you can keep iterating, trying to maximize the speedup.
 
+**Important: Wrap your entire code response in <code> </code> tags. Do not include any other text or explanations outside these tags.**
+
 Here's an example:
 
+<code>
 import torch.nn as nn
 from torch.utils.cpp_extension import load_inline
 
@@ -96,6 +99,7 @@ class ModelNew(nn.Module):
 
     def forward(self, a, b):
         return self.elementwise_add.elementwise_add_cuda(a, b)
+</code>
 
 After providing your complete ModelNew architecture, you must call calc_cuda_reward(cuda_src=<your_generated_code>) with your complete Python script as the parameter. Summarize your changes in a few sentences after the tool call.
 
@@ -115,7 +119,7 @@ _holdout = set(np.random.choice(len(_ds), size=20, replace=False))
 train, holdout = [], []
 
 for idx, ex in enumerate(_ds):
-    prompt_content = prompt_header + f"```python\n{ex['code']}\n```" + prompt_footer
+    prompt_content = prompt_header + f"<original_code>\n{ex['code']}\n</original_code>" + prompt_footer
 
     record = {
         "task_id": ex.get("task_id", f"kb_{idx:03d}"),

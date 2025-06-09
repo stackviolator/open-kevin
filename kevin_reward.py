@@ -73,7 +73,7 @@ def performance_reward(reference_code: str, cuda_src: str,
 
 def compute_score_modular(
     reference_code: str,
-    response: str,
+    cuda_src: str,
     *,
     perf_trials: int = 100,
     correct_trials: int = 5,
@@ -93,9 +93,9 @@ def compute_score_modular(
     kwargs = {'perf_trials': perf_trials, 'correct_trials': correct_trials}
     
     scores = {
-        'compile': compilation_reward(reference_code, response, **kwargs),
-        'correct': correctness_reward(reference_code, response, **kwargs),
-        'performance': performance_reward(reference_code, response, **kwargs)
+        'compile': compilation_reward(reference_code, cuda_src, **kwargs),
+        'correct': correctness_reward(reference_code, cuda_src, **kwargs),
+        'performance': performance_reward(reference_code, cuda_src, **kwargs)
     }
     
     # Weighted sum
@@ -105,6 +105,16 @@ def compute_score_modular(
     return total_score
 
 # For backward compatibility
-def compute_score(reference_code: str, response: str, **kwargs) -> float:
-    """Original interface preserved"""
-    return compute_score_modular(reference_code, response, **kwargs) 
+def compute_score(prompt: str, response: str, **kwargs) -> float:
+    """
+    Take original code from dataset and response from model
+    Args:
+    reference_code: str
+    response: str
+    **kwargs: dict
+    """
+
+    # Extract code from response
+    cuda_src = response.split("<code>")[1].split("</code>")[0]
+    reference_code = prompt.split("<original_code>")[1].split("</original_code>")[0]
+    return compute_score_modular(reference_code, cuda_src, **kwargs)
