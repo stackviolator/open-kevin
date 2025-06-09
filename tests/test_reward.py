@@ -5,98 +5,50 @@ from kevin_reward import compute_score
 # This will be used as the reference by the scoring function.
 PYTORCH_ADD_VECTORS = """
 import torch
-import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
 
-class Model(torch.nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        
+class Model(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
     def forward(self, a, b):
         return a + b
 
 def get_inputs():
-    a = torch.randn(10000, dtype=torch.float32)
-    b = torch.randn(10000, dtype=torch.float32)
+    # randomly generate input tensors based on the model architecture
+    a = torch.randn(1, 128).cuda()
+    b = torch.randn(1, 128).cuda()
     return [a, b]
 
 def get_init_inputs():
+    # randomly generate tensors required for initialization based on the model architecture
     return []
 """
 
 # A correct CUDA implementation that should be faster
 CUDA_CORRECT_FAST = """
 <code>
-#include <iostream>
-#include <fstream>
-#include <vector>
+#include <torch/extension.h>
 #include <cuda_runtime.h>
 
-__global__ void add_kernel(const float* a, const float* b, float* c, int n) {
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
-        c[idx] = a[idx] + b[idx];
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
     }
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <metadata_file> <output_file>" << std::endl;
-        return 1;
-    }
-    
-    std::string metadata_file = argv[1];
-    std::string output_file = argv[2];
-    
-    // Simple approach: assume input_0.bin and input_1.bin exist in same directory
-    std::string base_dir = metadata_file.substr(0, metadata_file.find_last_of("/\\") + 1);
-    std::string a_file = base_dir + "input_0.bin";
-    std::string b_file = base_dir + "input_1.bin";
-    
-    // Get file size to determine number of elements
-    std::ifstream fa(a_file, std::ios::binary | std::ios::ate);
-    size_t file_size = fa.tellg();
-    fa.seekg(0);
-    int n = file_size / sizeof(float);
-    
-    size_t size = n * sizeof(float);
-    float *h_a = new float[n];
-    float *h_b = new float[n];
-    float *h_c = new float[n];
-    
-    // Read input data from files
-    std::ifstream fb(b_file, std::ios::binary);
-    fa.read(reinterpret_cast<char*>(h_a), size);
-    fb.read(reinterpret_cast<char*>(h_b), size);
-    fa.close();
-    fb.close();
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
 
-    float *d_a, *d_b, *d_c;
-    cudaMalloc(&d_a, size);
-    cudaMalloc(&d_b, size);
-    cudaMalloc(&d_c, size);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
 
-    cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b, h_b, size, cudaMemcpyHostToDevice);
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
 
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
-    add_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
-
-    cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
-
-    // Write output to file
-    std::ofstream fout(output_file, std::ios::binary);
-    fout.write(reinterpret_cast<char*>(h_c), size);
-    fout.close();
-    
-    delete[] h_a;
-    delete[] h_b;
-    delete[] h_c;
-
-    cudaFree(d_a);
-    cudaFree(d_b);
-    cudaFree(d_c);
-    return 0;
+    return out;
 }
 </code>
 """
