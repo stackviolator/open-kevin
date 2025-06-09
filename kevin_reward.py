@@ -9,36 +9,55 @@ CUDA_RESET_CMD = os.getenv("GPU_RESET_CMD", "nvidia-smi --gpu-reset -i 0")
 TIMEOUT_S = 3
 GRID_LIMIT = 1024            # reject blocks > 1024 threads in any dim
 
-def _nvcc_compile_run(code: str) -> Dict[str, float | str | bool]:
-    """Helper that *must* run inside a child proc; compiles & launches kernel."""
-    with tempfile.TemporaryDirectory() as tmp:
-        cu_path = Path(tmp) / "kern.cu"
-        cu_path.write_text(code)
+def _compile_kernel(code: str, tmp_dir_path: str) -> Dict:
+    """Compiles the given CUDA code using nvcc."""
+    cu_path = Path(tmp_dir_path) / "kern.cu"
+    cu_path.write_text(code)
+    out_path = Path(tmp_dir_path) / "kern.out"
 
-        # ---------- compile ----------
-        start = time.time()
-        proc = subprocess.run(
-            ["nvcc", "-O3", str(cu_path), "-o", str(Path(tmp) / "kern.out")],
-            capture_output=True,
-            text=True,
-        )
-        compile_ms = (time.time() - start) * 1e3
-        if proc.returncode != 0:
-            return {"ok": False, "log": proc.stderr, "compile_ms": compile_ms}
+    proc = subprocess.run(
+        ["nvcc", "-O3", str(cu_path), "-o", str(out_path)],
+        capture_output=True,
+        text=True,
+    )
 
-        # ---------- run ----------
-        t0 = time.time()
-        run_proc = subprocess.run(
-            [str(Path(tmp) / "kern.out")], capture_output=True, text=True,
-        )
-        runtime_ms = (time.time() - t0) * 1e3
-        return {
-            "ok": run_proc.returncode == 0,
-            "log": proc.stderr + run_proc.stderr,
-            "compile_ms": compile_ms,
-            "runtime_ms": runtime_ms,
-            "stdout": run_proc.stdout,
-        }
+    if proc.returncode != 0:
+        return {"ok": False, "log": proc.stderr}
+
+    return {"ok": True, "executable_path": str(out_path), "log": proc.stderr}
+
+def _run_compiled_kernel(executable_path: str) -> Dict:
+    """Runs a compiled CUDA executable and captures its output and runtime."""
+    t0 = time.time()
+    run_proc = subprocess.run(
+        [executable_path], capture_output=True, text=True,
+    )
+    runtime_ms = (time.time() - t0) * 1e3
+
+    if run_proc.returncode != 0:
+        return {"ok": False, "log": run_proc.stderr, "stdout": run_proc.stdout}
+
+    return {
+        "ok": True,
+        "log": run_proc.stderr,
+        "stdout": run_proc.stdout,
+        "runtime_ms": runtime_ms,
+    }
+
+def _safe_exec(target_func, *args) -> Dict:
+    """Executes a target function in a sandboxed process with a timeout."""
+    q: mp.Queue = mp.Queue()
+    def _worker(queue, *args):
+        queue.put(target_func(*args))
+
+    p = mp.Process(target=_worker, args=(q,) + args)
+    p.start()
+    p.join(TIMEOUT_S)
+    if p.is_alive():
+        p.terminate()
+        _maybe_gpu_reset()
+        return {"ok": False, "log": "timeout", "timeout": True}
+    return q.get()
 
 _GRID_RE = re.compile(r"<<<\((.*?)\)>>>", re.S)
 
@@ -56,25 +75,6 @@ def _maybe_gpu_reset():
         subprocess.run(CUDA_RESET_CMD.split(), timeout=5)
     except Exception:
         pass  # ignore if reset unavailable
-
-def _safe_launch(code: str) -> Dict[str, float | str | bool]:
-    """Fork a subprocess; kill it if it exceeds TIMEOUT_S."""
-    if _grid_too_large(code):
-        return {"ok": False, "log": "grid too large", "rejected": True}
-
-    q: mp.Queue = mp.Queue()
-
-    def _worker(queue):
-        queue.put(_nvcc_compile_run(code))
-
-    p = mp.Process(target=_worker, args=(q,))
-    p.start()
-    p.join(TIMEOUT_S)
-    if p.is_alive():
-        p.terminate()
-        _maybe_gpu_reset()
-        return {"ok": False, "log": "timeout", "timeout": True}
-    return q.get()
 
 def _instrument_pytorch_code(code: str) -> str | None:
     """Instruments PyTorch code with a timing decorator for precise measurement."""
@@ -209,46 +209,47 @@ def check_correctness(kernel_output: str, reference_output: str) -> bool:
 
 def compute_score(original_code: str, response: str, **_) -> float:
     """Computes a reward score for a generated CUDA kernel."""
-
-    # R0: Bad format
+    # Step 0: Extract code and perform basic static analysis.
     code = extract_code(response)
     if not code:
-        return 0.0
+        return 0.0 # Bad format
+    if _grid_too_large(code):
+        return 0.0 # Grid dimensions too large
 
-    result = _safe_launch(code)
+    with tempfile.TemporaryDirectory() as tmp:
+        # Step 1: Check compilation.
+        compile_result = _safe_exec(_compile_kernel, code, tmp)
+        if not compile_result.get("ok"):
+            return 0.1 # R1: Compile error or timeout
 
-    # R1: Doesn't compile
-    if "runtime_ms" not in result:
-        return 0.1
+        # Step 2: Check execution.
+        executable_path = compile_result["executable_path"]
+        run_result = _safe_exec(_run_compiled_kernel, executable_path)
+        if not run_result.get("ok"):
+            print(f"CUDA runtime error log:\\n{run_result.get('log')}")
+            return 0.2 # R2: Runtime error or timeout
 
-    # R2: Runtime error (e.g. timeout, crash)
-    if not result.get("ok"):
-        print(f"CUDA runtime error log:\\n{result.get('log')}")
-        return 0.2
+        # Step 3: Check for correctness against the reference implementation.
+        pytorch_result = _run_pytorch_kernel(original_code)
+        if not pytorch_result.get("ok"):
+            # If the reference implementation fails, we can't score.
+            # Even though the submission compiled, we can't verify it.
+            return 0.2
 
-    # CUDA kernel is valid, now run original PyTorch kernel to get baseline
-    pytorch_result = _run_pytorch_kernel(original_code)
-    if not pytorch_result.get("ok"):
-        # If the reference implementation fails, we can't score.
-        # Even though the submission compiled, we can't verify it.
-        return 0.2
+        pytorch_runtime_ms = pytorch_result["runtime_ms"]
+        reference_output = pytorch_result["stdout"]
 
-    pytorch_runtime_ms = pytorch_result["runtime_ms"]
-    reference_output = pytorch_result["stdout"]
+        kernel_output = run_result.get("stdout", "")
+        if not check_correctness(kernel_output, reference_output):
+            return 0.3 # R3: Incorrect output
 
-    # R3: Incorrect output
-    kernel_output = result.get("stdout", "")
-    if not check_correctness(kernel_output, reference_output):
-        return 0.3
+        # Step 4: Check for speed.
+        runtime_ms = run_result["runtime_ms"]
+        if runtime_ms >= pytorch_runtime_ms:
+            return 0.4 # R4: Correct but not faster than baseline
 
-    runtime_ms = result["runtime_ms"]
-
-    # R4: Correct but not faster than baseline
-    if runtime_ms >= pytorch_runtime_ms:
-        return 0.4
-
-    # R5: Correct and faster
-    speedup = pytorch_runtime_ms / runtime_ms
-    # Scale reward between 0.4 and 1.0 for speedups up to 10x
-    reward = 0.4 + 0.6 * min((speedup - 1) / 9, 1)
-    return reward
+        # R5: Correct and faster
+        speedup = pytorch_runtime_ms / runtime_ms
+        # Scale reward between 0.4 and 1.0 for speedups up to 10x
+        reward = 0.4 + 0.6 * min((speedup - 1) / 9, 1)
+        return reward
