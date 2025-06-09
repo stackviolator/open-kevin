@@ -198,8 +198,6 @@ def check_correctness(kernel_output: str, reference_output: str) -> bool:
 
     Assumes outputs are space-separated lists of numbers.
     """
-    print(f"Kernel output: {kernel_output}")
-    print(f"Reference output: {reference_output}")
     try:
         kernel_vals = [float(x) for x in kernel_output.strip().split()]
         ref_vals = [float(x) for x in reference_output.strip().split()]
