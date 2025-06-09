@@ -109,8 +109,8 @@ class ModelNew(nn.Module):
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "__global__ void diag_matmul_kernel(",
-    "__global__ void diag_matmul_kernel(\n    for(volatile int i=0; i<1000000; ++i); // artificial delay\n    ("  # noqa: E501
+    "    const int row = blockIdx.y * blockDim.y + threadIdx.y;",
+    "    for(volatile int i=0; i<1000000; ++i); // artificial delay\n    \n    const int row = blockIdx.y * blockDim.y + threadIdx.y;"  # noqa: E501
 )
 
 # Compiles but produces incorrect output (multiplies by diag twice)
