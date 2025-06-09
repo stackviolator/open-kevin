@@ -4,7 +4,6 @@ set -x
 
 export MODEL_PATH=Qwen/Qwen2.5-0.5B-Instruct
 DATA_PATH=./
-VLLM_KV_CPU_OFFLOAD=1 # slow af but need for my tiny gpu 
 
 python3 -m verl.trainer.main_ppo \
    data.train_files=$DATA_PATH/data/kernelbench_train.parquet \
@@ -20,7 +19,6 @@ python3 -m verl.trainer.main_ppo \
    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
    actor_rollout_ref.rollout.multi_turn.enable=True \
    actor_rollout_ref.rollout.multi_turn.format=chatml \
-   actor_rollout_ref.rollout.multi_turn.tool_config_path=tools/kernel_tool.yaml \
    actor_rollout_ref.rollout.temperature=0.7 \
    actor_rollout_ref.rollout.top_p=0.9 \
    actor_rollout_ref.rollout.n=1 \
