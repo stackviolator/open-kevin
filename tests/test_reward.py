@@ -17,8 +17,8 @@ class Model(nn.Module):
 
 def get_inputs():
     # randomly generate input tensors based on the model architecture
-    a = torch.randn(1, 128).cuda()
-    b = torch.randn(1, 128).cuda()
+    a = torch.randn(1024, 1024).cuda()
+    b = torch.randn(1024, 1024).cuda()
     return [a, b]
 
 def get_init_inputs():
