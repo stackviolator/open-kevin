@@ -36,6 +36,9 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     reward_model.enable=False \
+    reward_model.reward_manager=kevin \
+    custom_reward_function.path=kevin_reward \
+    custom_reward_function.name=compute_score \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.kl_penalty=kl \
