@@ -1,145 +1,139 @@
-# scripts/split_kernel_bench.py
 from datasets import load_dataset, concatenate_datasets
-import random, json, pathlib
+import random, pathlib
 import pyarrow as pa
 import numpy as np
 
-# 1️⃣  load Level‑1 and Level‑2 splits (non‑streaming → indexable)
+"""Split KernelBench Level‑1 and Level‑2 into a small train/hold‑out set
+with an updated prompt that mirrors exactly what `test_reward.py` now
+expects: the model must return a single **Python script** whose body uses
+`torch.utils.cpp_extension.load_inline` to JIT‑compile an inline CUDA
+kernel and expose it via a `torch.nn.Module` subclass. The output is
+wrapped **solely** in `<code> … </code>` tags with *no* extra prose.
+"""
+
+# 1️⃣  Load Level‑1 and Level‑2 splits (non‑streaming → indexable)
 l1 = load_dataset("ScalingIntelligence/KernelBench", split="level_1", streaming=False)
 l2 = load_dataset("ScalingIntelligence/KernelBench", split="level_2", streaming=False)
 
-ds_full   = concatenate_datasets([l1, l2])
-ds        = ds_full.select(range(200))
+ds_full = concatenate_datasets([l1, l2])
+# Keep a small subset for the demo artefact
+_ds = ds_full.select(range(200))
 
-random.seed(42)
-indices = list(range(len(ds)))
-random.shuffle(indices)
-holdout_idx = set(np.random.choice(len(ds), size=20, replace=False))
+# ---------------------------------------------------------------------------
+# 📝 Prompt shown to the model during fine‑tuning / inference
+# ---------------------------------------------------------------------------
+# ⚠️  The guidance below is *precisely* aligned with `compute_score` in
+#     `test_reward.py`. Do **not** change lightly.
+# ---------------------------------------------------------------------------
 
-train, test = [], []
+prompt_header = """You are an expert CUDA programmer. Your mission is to convert a given PyTorch operator into a **high‑performance** custom CUDA kernel *wrapped* inside a Python script via **`torch.utils.cpp_extension.load_inline`**.
 
-prompt_header = """You are an expert CUDA programmer. Your mission is to convert a given PyTorch operator into a high-performance CUDA kernel that is both correct and fast.
-
-**Instructions:**
-1.  Analyze the provided PyTorch code.
-2.  Implement the equivalent logic in a CUDA kernel.
-3.  Include a `main` function to initialize data, launch the kernel, and print the result to standard output. The output format must match the original PyTorch script's output exactly.
-4.  Wrap your complete, runnable CUDA source code within `<code>` and `</code>` tags.
+**Instructions — your output must:**
+1. Analyse the provided PyTorch code.
+2. Implement the equivalent logic in a CUDA kernel (C++/CUDA).
+3. In a *single* Python script:
+   • JIT‑compile the kernel using `load_inline` (supplying both `cpp_sources` and `cuda_sources`).
+   • Expose the kernel via a subclass of `torch.nn.Module` whose `forward` method calls the compiled function.
+4. Output **only one** `<code> … </code>` block containing the full, runnable Python script — **no text** before or after the tags.
+5. Ensure your implementation is **correct** and noticeably **faster** than the baseline PyTorch operator.
 
 ---
 
-**Example:**
+**Example (for vector addition):**
 
 **PyTorch Operator:**
 ```python
 import torch
-import numpy as np
 
 def vector_add(a, b):
     return a + b
 
-# Initialization and execution
 size = 128
-a = torch.randn(size, dtype=torch.float32)
-b = torch.randn(size, dtype=torch.float32)
-c = vector_add(a, b)
-
-# Print output for verification
-for val in c:
-    print(f"{val.item():.6f}", end=' ')
+a = torch.randn(size)
+b = torch.randn(size)
+print(vector_add(a, b))
 ```
 
 **Your CUDA Solution:**
 <code>
-#include <iostream>
-#include <vector>
-#include <cuda_runtime.h>
-#include <iomanip>
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
 
+# ↳ Inline CUDA kernel & signature
+cuda_source = r'''
+#include <torch/extension.h>
 __global__ void add_kernel(const float* a, const float* b, float* c, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
-        c[idx] = a[idx] + b[idx];
-    }
+    if (idx < n) c[idx] = a[idx] + b[idx];
 }
 
-int main() {
-    // Initialization
-    int n = 128;
-    size_t size = n * sizeof(float);
-    float* h_a = new float[n];
-    float* h_b = new float[n];
-    // Using fixed values for reproducibility in the example
-    for (int i = 0; i < n; ++i) {
-        h_a[i] = static_cast<float>(i);
-        h_b[i] = static_cast<float>(i * 2);
-    }
-    float* h_c = new float[n];
-
-    float *d_a, *d_b, *d_c;
-    cudaMalloc(&d_a, size);
-    cudaMalloc(&d_b, size);
-    cudaMalloc(&d_c, size);
-
-    cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b, h_b, size, cudaMemcpyHostToDevice);
-
-    // Kernel launch
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
-    add_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
-
-    cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
-
-    // Print output for verification
-    std::cout << std::fixed << std::setprecision(6);
-    for (int i = 0; i < n; ++i) {
-        std::cout << h_c[i] << (i == n - 1 ? "" : " ");
-    }
-    std::cout << std::endl;
-
-    // Cleanup
-    delete[] h_a;
-    delete[] h_b;
-    delete[] h_c;
-    cudaFree(d_a);
-    cudaFree(d_b);
-    cudaFree(d_c);
-
-    return 0;
+torch::Tensor add_cuda(torch::Tensor a, torch::Tensor b) {
+    const int n = a.numel();
+    auto c = torch::empty_like(a);
+    const int threads = 256;
+    const int blocks  = (n + threads - 1) / threads;
+    add_kernel<<<blocks, threads>>>(a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(), n);
+    return c;
 }
+'''
+cpp_source = "torch::Tensor add_cuda(torch::Tensor a, torch::Tensor b);"
+
+add_mod = load_inline(
+    name="vector_add",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=["add_cuda"],
+    verbose=False,
+)
+
+class ModelNew(nn.Module):
+    def forward(self, a, b):
+        return add_mod.add_cuda(a, b)
 </code>
 
 ---
 
 **Your Turn:**
 
-Now, write a correct and fast CUDA kernel to replace the following PyTorch operator. Remember to include a `main` function and wrap the code in `<code>` tags.
+Following the same pattern, write a **correct** and **fast** inline‑CUDA solution for the operator below.
 
-**PyTorch Operator:**
-"""
+**PyTorch Operator:**"""
 
-for i, ex in enumerate(ds):
+# ---------------------------------------------------------------------------
+# 🔀 Train / hold‑out split (20 examples for hold‑out)
+# ---------------------------------------------------------------------------
+
+random.seed(42)
+indices = list(range(len(_ds)))
+random.shuffle(indices)
+_holdout = set(np.random.choice(len(_ds), size=20, replace=False))
+
+train, holdout = [], []
+
+for idx, ex in enumerate(_ds):
     prompt_content = prompt_header + f"```python\n{ex['code']}\n```"
 
     record = {
-        "task_id": ex.get("task_id", f"kb_{i:03d}"),
+        "task_id": ex.get("task_id", f"kb_{idx:03d}"),
         "prompt": [{"role": "user", "content": prompt_content}],
         "meta": {
             "name": ex["name"],
             "level": ex["level"],
         },
     }
-    (test if i in holdout_idx else train).append(record)
+    (holdout if idx in _holdout else train).append(record)
+
+# ---------------------------------------------------------------------------
+# 💾  Persist to Parquet
+# ---------------------------------------------------------------------------
 
 pathlib.Path("data").mkdir(exist_ok=True)
-for name, blob in (
+for fname, blob in (
     ("kernelbench_train.parquet", train),
-    ("kernelbench_holdout.parquet", test),
+    ("kernelbench_holdout.parquet", holdout),
 ):
-    # Convert list of dicts to PyArrow table
-    table = pa.Table.from_pylist(blob)
-    pa.parquet.write_table(table, f"data/{name}")
-    print(f"Wrote data/{name} ({len(blob)} rows)")
+    pa.parquet.write_table(pa.Table.from_pylist(blob), f"data/{fname}")
+    print(f"Wrote {fname} ({len(blob)} rows)")
 
-print(f"✅  wrote {len(train)} train and {len(test)} hold-out tasks")
+print(f"✅  wrote {len(train)} train and {len(holdout)} hold‑out tasks")
