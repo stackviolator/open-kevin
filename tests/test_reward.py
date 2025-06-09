@@ -65,15 +65,21 @@ int main() {
 """
 
 # Correct logic but implemented inefficiently to be slower
-CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace("add_kernel<<<1, 128>>>", "for(int i=0; i<100000; ++i) add_kernel<<<1, 128>>>")
+CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
+    "#include <cuda_runtime.h>",
+    "#include <cuda_runtime.h>\\n#include <thread>\\n#include <chrono>"
+).replace(
+    "int main() {",
+    "int main() { std::this_thread::sleep_for(std::chrono::milliseconds(50));"
+)
 
 # Compiles but produces incorrect output (adds a to itself)
 CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("c[idx] = a[idx] + b[idx];", "c[idx] = a[idx] + a[idx];")
 
-# This should cause a segmentation fault
+# This should cause a segmentation fault on the host
 CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace(
-    "c[idx] = a[idx] + b[idx];",
-    "float* p = NULL; c[idx] = *p;"
+    "int main() {",
+    "int main() { float* p = NULL; *p = 1.0f;"
 )
 
 # Code that will not compile
