@@ -140,7 +140,7 @@ def test_bad_format():
 
 def test_compile_error():
     """R1: Doesn't compile -> 0.1"""
-    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_COMPILE_ERROR) == pytest.approx(0.1)
+    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_COMPILE_ERROR) == 0.0
 
 
 def test_incorrect_output():

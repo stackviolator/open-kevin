@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Dict, Any, Tuple
 from pathlib import Path
+import re
 
 # === kernelbench imports ===
 import sys
@@ -20,6 +21,38 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time
 # --------------------------------------------
 # Utility functions
 # --------------------------------------------
+
+def _extract_code_from_response(response: str) -> str:
+    """
+    Extract code from response, handling various formats:
+    - <code>...</code> tags
+    - ```...``` code blocks
+    - Raw code without tags
+    """
+    # Try to extract from <code> tags first
+    code_match = re.search(r'<code>(.*?)</code>', response, re.DOTALL)
+    if code_match:
+        return code_match.group(1).strip()
+    
+    # Try to extract from markdown code blocks
+    code_block_match = re.search(r'```(?:\w+)?\s*(.*?)```', response, re.DOTALL)
+    if code_block_match:
+        return code_block_match.group(1).strip()
+    
+    # If no tags found, return the response as-is (assume it's raw code)
+    return response.strip()
+
+def _extract_reference_code_from_prompt(prompt: str) -> str:
+    """
+    Extract reference code from prompt, handling various formats
+    """
+    # Try to extract from <original_code> tags
+    ref_match = re.search(r'<original_code>(.*?)</original_code>', prompt, re.DOTALL)
+    if ref_match:
+        return ref_match.group(1).strip()
+    
+    # If no tags found, return the prompt as-is
+    return prompt.strip()
 
 def _get_kernel_result(reference_code: str, cuda_src: str, 
                       correct_trials: int = 5, perf_trials: int = 100) -> KernelExecResult:
@@ -114,7 +147,8 @@ def compute_score(prompt: str, response: str, **kwargs) -> float:
     **kwargs: dict
     """
 
-    # Extract code from response
-    cuda_src = response.split("<code>")[1].split("</code>")[0]
-    reference_code = prompt.split("<original_code>")[1].split("</original_code>")[0]
+    # Extract code from response using robust extraction
+    cuda_src = _extract_code_from_response(response)
+    reference_code = _extract_reference_code_from_prompt(prompt)
+    
     return compute_score_modular(reference_code, cuda_src, **kwargs)
