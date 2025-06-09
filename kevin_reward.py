@@ -120,7 +120,7 @@ def time_this(func):
 """
 
     # Combine the wrapper, the decorated code, and the final print statement.
-    final_code = wrapper_code + "\\n" + code_with_decorator + """
+    final_code = wrapper_code + "\n" + code_with_decorator + """
 if __start_time is not None and __end_time is not None:
     runtime_ms = (__end_time - __start_time) * 1000
     print(str(runtime_ms), file=sys.stderr, flush=True)
