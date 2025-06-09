@@ -228,9 +228,11 @@ def compute_score(original_code: str, response: str, **_) -> float:
         executable_path = compile_result["executable_path"]
         run_result = _safe_exec(_run_compiled_kernel, executable_path)
         if not run_result.get("ok"):
+            print(f"CUDA kernel failed: {run_result}")
             return 0.2
         pytorch_result = _run_pytorch_kernel(original_code)
         if not pytorch_result.get("ok"):
+            print(f"PyTorch kernel failed: {pytorch_result}")
             return 0.2
 
         # R3: Correct output
