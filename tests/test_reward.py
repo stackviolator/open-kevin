@@ -35,6 +35,9 @@ def get_inputs():
     A = torch.randn(N)
     B = torch.randn(N, M)
     return [A, B]
+
+def get_init_inputs():
+    return []  # No special initialization inputs needed
 """
 
 # A correct CUDA implementation that should be faster
