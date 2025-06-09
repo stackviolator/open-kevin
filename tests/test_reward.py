@@ -109,8 +109,17 @@ class ModelNew(nn.Module):
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "    const int row = blockIdx.y * blockDim.y + threadIdx.y;",
-    "    for(volatile int i=0; i<1000000; ++i); // artificial delay\n    \n    const int row = blockIdx.y * blockDim.y + threadIdx.y;"  # noqa: E501
+    "const dim3 threads(16, 16);",
+    "const dim3 threads(1, 1);"
+).replace(
+    "out[row * M + col] = diag[row] * mat[row * M + col];",
+    """// Add unnecessary operations to make it slower
+        float temp = 0.0f;
+        for (int i = 0; i < 10; i++) {
+            temp += diag[row] * 0.1f;
+        }
+        __syncthreads(); // Unnecessary synchronization
+        out[row * M + col] = diag[row] * mat[row * M + col] + temp - temp;"""
 )
 
 # Compiles but produces incorrect output (multiplies by diag twice)
