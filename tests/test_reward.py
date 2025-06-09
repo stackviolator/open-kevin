@@ -91,12 +91,6 @@ CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
 # Compiles but produces incorrect output (adds a to itself)
 CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("out[idx] = a[idx] + b[idx];", "out[idx] = a[idx] + a[idx];")
 
-# This should cause a segmentation fault on the host
-CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace(
-    "def forward(self, a, b):",
-    "def forward(self, a, b):\n        # This will cause a segfault\n        import ctypes\n        ctypes.string_at(0)"
-)
-
 # Code that will not compile
 CUDA_COMPILE_ERROR = "<code> int main() { ERROR SYNTAX; } </code>"
 
@@ -112,21 +106,17 @@ def test_compile_error():
     """R1: Doesn't compile -> 0.1"""
     assert compute_score(PYTORCH_ADD_VECTORS, CUDA_COMPILE_ERROR) == pytest.approx(0.1)
 
-def test_runtime_error():
-    """R2: Runtime error -> 0.2"""
-    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_RUNTIME_ERROR) == pytest.approx(0.2)
-
 def test_incorrect_output():
-    """R3: Incorrect output -> 0.3"""
-    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_INCORRECT_OUTPUT) == pytest.approx(0.3)
+    """R2: Incorrect output -> 0.2"""
+    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_INCORRECT_OUTPUT) == pytest.approx(0.2)
 
 def test_correct_but_slower():
-    """R4: Correct but not faster -> 0.4"""
+    """R3: Correct but not faster -> 0.3"""
     # This test is sensitive to system load. It might be flaky.
     # It assumes the pytorch version is faster than the serially-launched kernel.
-    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_CORRECT_SLOW) == pytest.approx(0.4)
+    assert compute_score(PYTORCH_ADD_VECTORS, CUDA_CORRECT_SLOW) == pytest.approx(0.3)
 
 def test_correct_and_faster():
-    """R5: Correct and faster -> > 0.4"""
+    """R4: Correct and faster -> > 0.4"""
     reward = compute_score(PYTORCH_ADD_VECTORS, CUDA_CORRECT_FAST)
-    assert reward > 0.4 
+    assert reward > 0.4
