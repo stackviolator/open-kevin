@@ -223,6 +223,7 @@ def compute_score(original_code: str, response: str, **_) -> float:
 
     # R2: Runtime error (e.g. timeout, crash)
     if not result.get("ok"):
+        print(f"CUDA runtime error log:\\n{result.get('log')}")
         return 0.2
 
     # CUDA kernel is valid, now run original PyTorch kernel to get baseline
