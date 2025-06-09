@@ -65,13 +65,16 @@ int main() {
 """
 
 # Correct logic but implemented inefficiently to be slower
-CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace("add_kernel<<<1, 128>>>", "for(int i=0; i<1000; ++i) add_kernel<<<1, 128>>>")
+CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace("add_kernel<<<1, 128>>>", "for(int i=0; i<100000; ++i) add_kernel<<<1, 128>>>")
 
 # Compiles but produces incorrect output (adds a to itself)
 CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("c[idx] = a[idx] + b[idx];", "c[idx] = a[idx] + a[idx];")
 
-# Valid CUDA syntax but will cause a runtime error (invalid memory access)
-CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace("c[idx] = a[idx] + b[idx];", "c[idx] = a[1000000];")
+# This should cause a segmentation fault
+CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace(
+    "c[idx] = a[idx] + b[idx];",
+    "float* p = NULL; c[idx] = *p;"
+)
 
 # Code that will not compile
 CUDA_COMPILE_ERROR = "<code> int main() { ERROR SYNTAX; } </code>"
