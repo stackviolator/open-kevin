@@ -5,6 +5,16 @@ from typing import Dict, Any
 from pathlib import Path
 
 # === kernelbench imports ===
+import sys
+import os
+from pathlib import Path
+
+# Add kernelbench to Python path to handle submodule imports
+_current_dir = Path(__file__).parent
+_kernelbench_path = _current_dir / "kernelbench"
+if _kernelbench_path.exists() and str(_kernelbench_path) not in sys.path:
+    sys.path.insert(0, str(_kernelbench_path))
+
 from kernelbench.src.eval import eval_kernel_against_ref, KernelExecResult
 from kernelbench.scripts.generate_baseline_time import measure_program_time
 
