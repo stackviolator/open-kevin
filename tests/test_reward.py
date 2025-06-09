@@ -10,12 +10,15 @@ import numpy as np
 def vector_add(a, b):
     return a + b
 
-size = 128
+size = 1000000  # Larger size so CUDA can actually be faster
 a = torch.ones(size, dtype=torch.float32) * 2
 b = torch.ones(size, dtype=torch.float32) * 3
 c = vector_add(a, b)
 
-for val in c:
+# Only print first 128 values to keep output manageable
+for i, val in enumerate(c):
+    if i >= 128:
+        break
     print(f"{val.item()}", end=' ')
 """
 
@@ -34,9 +37,11 @@ __global__ void add_kernel(const float* a, const float* b, float* c, int n) {
 }
 
 int main() {
-    int n = 128;
+    int n = 1000000;
     size_t size = n * sizeof(float);
-    float h_a[128], h_b[128], h_c[128];
+    float *h_a = new float[n];
+    float *h_b = new float[n];
+    float *h_c = new float[n];
     for(int i=0; i<n; ++i) { h_a[i] = 2.0f; h_b[i] = 3.0f; }
 
     float *d_a, *d_b, *d_c;
@@ -47,14 +52,22 @@ int main() {
     cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b, size, cudaMemcpyHostToDevice);
 
-    add_kernel<<<1, 128>>>(d_a, d_b, d_c, n);
+    // Use multiple blocks for larger problem
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
+    add_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
 
     cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
 
-    for (int i = 0; i < n; ++i) {
-        std::cout << h_c[i] << (i == n - 1 ? "" : " ");
+    // Only print first 128 values to match PyTorch output
+    for (int i = 0; i < 128; ++i) {
+        std::cout << h_c[i] << (i == 127 ? "" : " ");
     }
     std::cout << std::endl;
+    
+    delete[] h_a;
+    delete[] h_b;
+    delete[] h_c;
 
     cudaFree(d_a);
     cudaFree(d_b);
@@ -67,7 +80,7 @@ int main() {
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
     "int main() {",
-    "int main() { for(volatile int i=0; i<500000000; ++i); "
+    "int main() { for(volatile int i=0; i<100000000; ++i); "
 )
 
 # Compiles but produces incorrect output (adds a to itself)
