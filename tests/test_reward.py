@@ -66,11 +66,8 @@ int main() {
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "#include <cuda_runtime.h>",
-    "#include <cuda_runtime.h>\\n#include <thread>\\n#include <chrono>"
-).replace(
     "int main() {",
-    "int main() { std::this_thread::sleep_for(std::chrono::milliseconds(50));"
+    "int main() { for(volatile int i=0; i<50000000; ++i); "
 )
 
 # Compiles but produces incorrect output (adds a to itself)
