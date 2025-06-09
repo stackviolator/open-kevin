@@ -108,7 +108,7 @@ class ModelNew(nn.Module):
 """
 
 # Correct logic but implemented inefficiently to be slower
-CUDA_CORRECT_SLOW = PYTORCH_ADD_VECTORS
+CUDA_CORRECT_SLOW = f"<code>{PYTORCH_ADD_VECTORS}</code>"
 
 # Compiles but produces incorrect output (multiplies by diag twice)
 CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("out[row * M + col] = diag[row] * mat[row * M + col];", "out[row * M + col] = diag[row] * diag[row] * mat[row * M + col];")
