@@ -209,47 +209,41 @@ def check_correctness(kernel_output: str, reference_output: str) -> bool:
 
 def compute_score(original_code: str, response: str, **_) -> float:
     """Computes a reward score for a generated CUDA kernel."""
-    # Step 0: Extract code and perform basic static analysis.
+    # R0: Format checks
     code = extract_code(response)
     if not code:
         return 0.0 # Bad format
+    
+    # R1: Code Compiles
     if _grid_too_large(code):
-        return 0.0 # Grid dimensions too large
-
+        return 0.1 
     with tempfile.TemporaryDirectory() as tmp:
-        # Step 1: Check compilation.
         compile_result = _safe_exec(_compile_kernel, code, tmp)
         if not compile_result.get("ok"):
-            return 0.1 # R1: Compile error or timeout
+            return 0.1
 
-        # Step 2: Check execution.
+        # R2: Code is correct (same output as pytorch)
         executable_path = compile_result["executable_path"]
         run_result = _safe_exec(_run_compiled_kernel, executable_path)
         if not run_result.get("ok"):
             print(f"CUDA runtime error log:\\n{run_result.get('log')}")
-            return 0.2 # R2: Runtime error or timeout
-
-        # Step 3: Check for correctness against the reference implementation.
+            return 0.2
         pytorch_result = _run_pytorch_kernel(original_code)
         if not pytorch_result.get("ok"):
-            # If the reference implementation fails, we can't score.
-            # Even though the submission compiled, we can't verify it.
-            return 0.2
+            return 0.3
 
         pytorch_runtime_ms = pytorch_result["runtime_ms"]
         reference_output = pytorch_result["stdout"]
-
         kernel_output = run_result.get("stdout", "")
         if not check_correctness(kernel_output, reference_output):
-            return 0.3 # R3: Incorrect output
+            return 0.3
 
-        # Step 4: Check for speed.
+        # R3: Correct but not faster than baseline
         runtime_ms = run_result["runtime_ms"]
         if runtime_ms >= pytorch_runtime_ms:
-            return 0.4 # R4: Correct but not faster than baseline
+            return 0.4
 
-        # R5: Correct and faster
+        # R4: Correct and faster
         speedup = pytorch_runtime_ms / runtime_ms
         # Scale reward between 0.4 and 1.0 for speedups up to 10x
-        reward = 0.4 + 0.6 * min((speedup - 1) / 9, 1)
-        return reward
+        return 0.4 + 0.6 * min((speedup - 1) / 9, 1)
