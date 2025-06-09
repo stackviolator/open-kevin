@@ -7,25 +7,27 @@ PYTORCH_ADD_VECTORS = """
 import torch
 import numpy as np
 
-def vector_add(a, b):
-    return a + b
+class Model(torch.nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        
+    def forward(self, a, b):
+        return a + b
 
-size = 1000000  # Larger size so CUDA can actually be faster
-a = torch.ones(size, dtype=torch.float32) * 2
-b = torch.ones(size, dtype=torch.float32) * 3
-c = vector_add(a, b)
+def get_inputs():
+    a = torch.randn(10000, dtype=torch.float32)
+    b = torch.randn(10000, dtype=torch.float32)
+    return [a, b]
 
-# Only print first 128 values to keep output manageable
-for i, val in enumerate(c):
-    if i >= 128:
-        break
-    print(f"{val.item()}", end=' ')
+def get_init_inputs():
+    return []
 """
 
 # A correct CUDA implementation that should be faster
 CUDA_CORRECT_FAST = """
 <code>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <cuda_runtime.h>
 
@@ -36,13 +38,37 @@ __global__ void add_kernel(const float* a, const float* b, float* c, int n) {
     }
 }
 
-int main() {
-    int n = 1000000;
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <metadata_file> <output_file>" << std::endl;
+        return 1;
+    }
+    
+    std::string metadata_file = argv[1];
+    std::string output_file = argv[2];
+    
+    // Simple approach: assume input_0.bin and input_1.bin exist in same directory
+    std::string base_dir = metadata_file.substr(0, metadata_file.find_last_of("/\\") + 1);
+    std::string a_file = base_dir + "input_0.bin";
+    std::string b_file = base_dir + "input_1.bin";
+    
+    // Get file size to determine number of elements
+    std::ifstream fa(a_file, std::ios::binary | std::ios::ate);
+    size_t file_size = fa.tellg();
+    fa.seekg(0);
+    int n = file_size / sizeof(float);
+    
     size_t size = n * sizeof(float);
     float *h_a = new float[n];
     float *h_b = new float[n];
     float *h_c = new float[n];
-    for(int i=0; i<n; ++i) { h_a[i] = 2.0f; h_b[i] = 3.0f; }
+    
+    // Read input data from files
+    std::ifstream fb(b_file, std::ios::binary);
+    fa.read(reinterpret_cast<char*>(h_a), size);
+    fb.read(reinterpret_cast<char*>(h_b), size);
+    fa.close();
+    fb.close();
 
     float *d_a, *d_b, *d_c;
     cudaMalloc(&d_a, size);
@@ -52,18 +78,16 @@ int main() {
     cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b, size, cudaMemcpyHostToDevice);
 
-    // Use multiple blocks for larger problem
     int threadsPerBlock = 256;
     int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
     add_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
 
     cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
 
-    // Only print first 128 values to match PyTorch output
-    for (int i = 0; i < 128; ++i) {
-        std::cout << h_c[i] << (i == 127 ? "" : " ");
-    }
-    std::cout << std::endl;
+    // Write output to file
+    std::ofstream fout(output_file, std::ios::binary);
+    fout.write(reinterpret_cast<char*>(h_c), size);
+    fout.close();
     
     delete[] h_a;
     delete[] h_b;
@@ -79,8 +103,8 @@ int main() {
 
 # Correct logic but implemented inefficiently to be slower
 CUDA_CORRECT_SLOW = CUDA_CORRECT_FAST.replace(
-    "int main() {",
-    "int main() { for(volatile int i=0; i<100000000; ++i); "
+    "int main(int argc, char* argv[]) {",
+    "int main(int argc, char* argv[]) { for(volatile int i=0; i<100000000; ++i); "
 )
 
 # Compiles but produces incorrect output (adds a to itself)
@@ -88,8 +112,8 @@ CUDA_INCORRECT_OUTPUT = CUDA_CORRECT_FAST.replace("c[idx] = a[idx] + b[idx];", "
 
 # This should cause a segmentation fault on the host
 CUDA_RUNTIME_ERROR = CUDA_CORRECT_FAST.replace(
-    "int main() {",
-    "int main() { float* p = NULL; *p = 1.0f;"
+    "int main(int argc, char* argv[]) {",
+    "int main(int argc, char* argv[]) { float* p = NULL; *p = 1.0f;"
 )
 
 # Code that will not compile
