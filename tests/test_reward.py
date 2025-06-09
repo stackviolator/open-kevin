@@ -29,6 +29,13 @@ def get_init_inputs():
 # A correct CUDA implementation that should be faster
 CUDA_CORRECT_FAST = """
 <code>
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.cpp_extension import load_inline
+
+# Define the custom CUDA kernel for element-wise addition
+elementwise_add_source = '''
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 
@@ -50,6 +57,28 @@ torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
 
     return out;
 }
+'''
+
+elementwise_add_cpp_source = "torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);"
+
+# Compile the inline CUDA code for element-wise addition
+elementwise_add = load_inline(
+    name='elementwise_add',
+    cpp_sources=elementwise_add_cpp_source,
+    cuda_sources=elementwise_add_source,
+    functions=['elementwise_add_cuda'],
+    verbose=True,
+    extra_cflags=[''],
+    extra_ldflags=['']
+)
+
+class ModelNew(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.elementwise_add = elementwise_add
+
+    def forward(self, a, b):
+        return self.elementwise_add.elementwise_add_cuda(a, b)
 </code>
 """
 
