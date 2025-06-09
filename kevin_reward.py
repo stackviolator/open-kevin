@@ -37,8 +37,7 @@ def compute_score(                           # ← same signature as before
     *,
     perf_trials: int = 100,
     correct_trials: int = 5,
-    timeout_s: int = 300,
-    gpu_arch: list[str] | None = None,
+
 ) -> float:
     """
     score = 0.0 … 1.0
@@ -60,9 +59,7 @@ def compute_score(                           # ← same signature as before
         custom_model_src=cuda_src,
         num_correct_trials=correct_trials,
         num_perf_trials=perf_trials,
-        timeout=timeout_s,
         measure_performance=True,
-        gpu_arch=gpu_arch or ["Ada"],       # default to Ada; override if needed
     )
 
     if not kb_result.compiled:
