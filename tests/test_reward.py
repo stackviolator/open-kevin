@@ -4,6 +4,7 @@ from kevin_reward import compute_score
 # Baseline correct PyTorch implementation for vector addition
 # This will be used as the reference by the scoring function.
 PYTORCH_ADD_VECTORS = """
+<original_code>
 import torch
 import torch.nn as nn
 
@@ -27,7 +28,6 @@ class Model(nn.Module):
             torch.Tensor: The result of the matrix multiplication. Shape: (N, M).
         '''
         return torch.diag(A) @ B
-
 M = 4096
 N = 4096
 
@@ -38,6 +38,7 @@ def get_inputs():
 
 def get_init_inputs():
     return []  # No special initialization inputs needed
+</original_code>
 """
 
 # A correct CUDA implementation that should be faster
