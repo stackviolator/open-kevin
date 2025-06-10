@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-kevin"
+version = "0.1.0"
+description = "A project for training reward models for code generation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "anthropic",
+    "modal",
+    "numpy",
+    "openai",
+    "packaging",
+    "pydra_config",
+    "torch==2.6.0",
+    "tqdm",
+    "datasets",
+    "transformers",
+    "google-generativeai",
+    "together",
+    "pytest",
+    "ninja",
+    "archon-ai",
+    "einops",
+    "verifiers[all]>=0.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[tool.setuptools]
+py-modules = ["kevin_reward"]
