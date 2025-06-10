@@ -7,7 +7,7 @@ name = "open-kevin"
 version = "0.1.0"
 description = "A project for training reward models for code generation."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -31,7 +31,7 @@ dependencies = [
     "ninja",
     "archon-ai",
     "einops",
-    "verifiers[all]>=0.0.0",
+    "verifiers[all]>=0.1.0",
 ]
 
 [project.optional-dependencies]
