@@ -3,13 +3,7 @@ from __future__ import annotations
 """Command-line entry point that replicates the original *train.py* while
 organising it under the `open_kevin` namespace.
 
-Example execution – using the same environment variables as before:
-
-```
-CUDA_VISIBLE_DEVICES=1,2,3 accelerate launch --num-processes 3 \
-    --config-file ~/verifiers/configs/zero3.yaml \
-    -m open_kevin.cli.train
-```
+CUDA_VISIBLE_DEVICES=1,2,3 accelerate launch --num-processes 3 --config-file ~/verifiers/configs/zero3.yaml -m open_kevin.cli.train
 """
 
 from dotenv import load_dotenv
@@ -19,11 +13,7 @@ load_dotenv()
 import datasets
 import verifiers as vf
 
-from open_kevin.rewards import (
-    compilation_reward,
-    correctness_reward,
-    performance_reward,
-)
+from open_kevin.rewards import compute_score_modular
 from open_kevin.prompts import system_prompt as _system_prompt
 
 
@@ -40,12 +30,10 @@ def build_trainer() -> vf.GRPOTrainer:  # type: ignore[name-defined]
     # ---------------------------------------------------------------------
     rubric = vf.Rubric(
         funcs=[
-            compilation_reward,
-            correctness_reward,
-            performance_reward,
+            compute_score_modular,
             parser.get_format_reward_func(),
         ],
-        weights=[0.2, 0.3, 0.5, 0.2],
+        weights=[1.0, 0.2],
     )
 
     # ---------------------------------------------------------------------
@@ -69,14 +57,14 @@ def build_trainer() -> vf.GRPOTrainer:  # type: ignore[name-defined]
         rubric=rubric,
     )
 
-    args = vf.grpo_defaults(run_name="le-epic-test")
-    args.num_iterations = 10
-    args.per_device_train_batch_size = 10
-    args.num_generations = 10
-    args.gradient_accumulation_steps = 4
+    args = vf.grpo_defaults(run_name="kevin-single-turn")
+    args.num_iterations = 20
+    args.per_device_train_batch_size = 32
+    args.num_generations = 5
+    args.gradient_accumulation_steps = 2
     args.eval_strategy = "steps"
     args.eval_steps = 10
-    args.max_steps = 100
+    args.num_train_epochs= 1
 
     model, tokenizer = vf.get_model_and_tokenizer(MODEL_NAME)
 

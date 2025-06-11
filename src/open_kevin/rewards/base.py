@@ -12,6 +12,7 @@ Any new, higher-level convenience imports should live in
 from typing import Dict, Tuple
 import sys
 from pathlib import Path
+import re
 
 import verifiers as vf
 
@@ -34,6 +35,62 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time  # t
 # ---------------------------------------------------------------------------
 _KB_RESULT_CACHE: Dict[Tuple[str, str, int, int], "KernelExecResult"] = {}
 
+# ---------------------------------------------------------------------------
+# Torch.nn usage guard
+# ---------------------------------------------------------------------------
+
+_ALLOWED_NN_ATTRS = {
+    "Parameter",
+    "ParameterList",
+    "ModuleList",
+    "Sequential",
+    "ModuleDict",
+    "init",  # sub-module torch.nn.init.*
+    "Module",  # base container class
+}
+
+
+_NN_USAGE_PATTERN = re.compile(r"\b(?:torch\.nn|nn)\.(\w+)")
+
+
+def _uses_disallowed_torch_nn(completion: str) -> bool:
+    """Return True if the provided <code> block uses torch.nn in a disallowed way.
+
+    The system prompt forbids any use of ``torch.nn`` except for a small
+    whitelist (``Parameter``, container classes, and ``init`` utilities). This
+    helper performs a *best-effort* static check by scanning the user-provided
+    code for attribute access patterns such as ``torch.nn.Conv2d`` or
+    ``nn.functional.relu`` that are **not** on the whitelist. If any such usage
+    is detected, the function returns ``True``.
+    """
+
+    # The ``completion`` argument may be either a raw string containing the
+    # <code> tag or a list of chat messages (as produced by the OpenAI
+    # ChatCompletion API). Normalise it into the textual payload that contains
+    # the candidate program.
+    if isinstance(completion, str):
+        completion_text = completion
+    else:  # assume list[dict[str, str]] ala OpenAI messages
+        try:
+            completion_text = completion[-1]["content"]
+        except Exception:
+            return True  # malformed structure -> reject
+
+    try:
+        parser = vf.XMLParser(["think", "code"])
+        parsed = parser.parse(completion_text)
+        code_src = parsed.code
+    except Exception:
+        # If structured parsing fails, fall back to inspecting the raw text.
+        code_src = completion_text
+
+    for match in _NN_USAGE_PATTERN.finditer(code_src):
+        attr = match.group(1)
+        if attr not in _ALLOWED_NN_ATTRS:
+            return True
+
+    return False
+
 
 def _get_kernel_result(
     prompt: str,
@@ -45,11 +102,22 @@ def _get_kernel_result(
     **kwargs,
 ) -> KernelExecResult:
     """Internal helper that runs kernelbench evaluation & caches results."""
+    # Normalise *prompt* and *completion* into their textual payloads.
+    if isinstance(completion, str):
+        completion_text = completion
+    else:
+        completion_text = completion[-1]["content"]  # type: ignore[index]
+
+    if isinstance(prompt, str):
+        prompt_text = prompt
+    else:
+        prompt_text = prompt[-1]["content"]  # type: ignore[index]
+
     parser = vf.XMLParser(["think", "code"])
-    parsed = parser.parse(completion[-1]["content"])
+    parsed = parser.parse(completion_text)
     custom_code = parsed.code
 
-    ref_code = prompt[-1]["content"]
+    ref_code = prompt_text
 
     cache_key = (ref_code, custom_code, correct_trials, perf_trials)
     if cache_key in _KB_RESULT_CACHE:
@@ -141,6 +209,12 @@ def compute_score_modular(
     weights: Dict[str, float] | None = None,
 ) -> float:
     """Vectorised reward function combining individual metrics with weights."""
+
+    # -------------------------------------------------------------------
+    # Guard against disallowed ``torch.nn`` usage before any heavy eval.
+    # -------------------------------------------------------------------
+    if _uses_disallowed_torch_nn(completion):
+        return 0.0
 
     if weights is None:
         weights = _default_weights
