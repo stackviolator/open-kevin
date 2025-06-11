@@ -22,38 +22,6 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time
 # Utility functions
 # --------------------------------------------
 
-def _extract_code_from_response(response: str) -> str:
-    """
-    Extract code from response, handling various formats:
-    - <code>...</code> tags
-    - ```...``` code blocks
-    - Raw code without tags
-    """
-    # Try to extract from <code> tags first
-    code_match = re.search(r'<code>(.*?)</code>', response, re.DOTALL)
-    if code_match:
-        return code_match.group(1).strip()
-    
-    # Try to extract from markdown code blocks
-    code_block_match = re.search(r'```(?:\w+)?\s*(.*?)```', response, re.DOTALL)
-    if code_block_match:
-        return code_block_match.group(1).strip()
-    
-    # If no tags found, return the response as-is (assume it's raw code)
-    return response.strip()
-
-def _extract_reference_code_from_prompt(prompt: str) -> str:
-    """
-    Extract reference code from prompt, handling various formats
-    """
-    # Try to extract from <original_code> tags
-    ref_match = re.search(r'<original_code>(.*?)</original_code>', prompt, re.DOTALL)
-    if ref_match:
-        return ref_match.group(1).strip()
-    
-    # If no tags found, return the prompt as-is
-    return prompt.strip()
-
 def _get_kernel_result(reference_code: str, cuda_src: str, 
                       correct_trials: int = 5, perf_trials: int = 100) -> KernelExecResult:
     return eval_kernel_against_ref(
@@ -68,27 +36,27 @@ def _get_kernel_result(reference_code: str, cuda_src: str,
 # Individual reward components
 # --------------------------------------------
 
-def compilation_reward(reference_code: str, cuda_src: str, **kwargs) -> float:
+def compilation_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
     """Reward for successful compilation (0.0 or 1.0)"""
-    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, **kwargs)
     return 1.0 if kb_result.compiled else 0.0
 
-def correctness_reward(reference_code: str, cuda_src: str, **kwargs) -> float:
+def correctness_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
     """Reward for correctness (0.0 or 1.0)"""
-    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, **kwargs)
     return 1.0 if kb_result.correctness else 0.0
 
-def performance_reward(reference_code: str, cuda_src: str, 
+def performance_reward(prompt: str, completion: str, answer: str, 
                       perf_trials: int = 100, **kwargs) -> float:
     """Reward based on speedup (0.0 to 1.0)"""
-    kb_result = _get_kernel_result(reference_code, cuda_src, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, **kwargs)
     if not kb_result.compiled or not kb_result.correctness:
         return 0.0
     
     # Get baseline timing
     eager_stats = measure_program_time(
         ref_arch_name="ref",
-        ref_arch_src=reference_code,
+        ref_arch_src=prompt,
         num_trials=perf_trials,
         use_torch_compile=False,
     )
@@ -138,7 +106,7 @@ def compute_score_modular(
     return total_score
 
 # For backward compatibility
-def compute_score(prompt: str, response: str, **kwargs) -> float:
+def compute_score(prompt: str, completion: str, answer: str, **kwargs) -> float:
     """
     Take original code from dataset and response from model
     Args:
@@ -146,9 +114,4 @@ def compute_score(prompt: str, response: str, **kwargs) -> float:
     response: str
     **kwargs: dict
     """
-
-    # Extract code from response using robust extraction
-    cuda_src = _extract_code_from_response(response)
-    reference_code = _extract_reference_code_from_prompt(prompt)
-    
-    return compute_score_modular(reference_code, cuda_src, **kwargs)
+    return compute_score_modular(prompt, answer, **kwargs)
