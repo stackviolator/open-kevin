@@ -24,14 +24,27 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time
 # Utility functions
 # --------------------------------------------
 
+# --------------------------------------------
+# Simple cache to avoid recompiling/rerunning the same kernel
+# --------------------------------------------
+
+# Keyed by (ref_code, custom_code, correct_trials, perf_trials)
+_KB_RESULT_CACHE: Dict[Tuple[str, str, int, int], "KernelExecResult"] = {}
+
 def _get_kernel_result(prompt: str, answer: str, completion: str,
                       correct_trials: int = 5, perf_trials: int = 100, **kwargs) -> KernelExecResult:
     parser = vf.XMLParser(['think', 'code'])
-    print(f"completion: {completion}")
     parsed = parser.parse(completion[-1]['content'])
     custom_code = parsed.code
 
     ref_code = prompt[-1]['content']
+
+    # --------------------------------------------------
+    # Check cache – avoid redundant compilation/execution
+    # --------------------------------------------------
+    cache_key = (ref_code, custom_code, correct_trials, perf_trials)
+    if cache_key in _KB_RESULT_CACHE:
+        return _KB_RESULT_CACHE[cache_key]
 
     # Call kernelbench eval; it may return None if it thinks there was a transient lock-file error.
     kb_result = eval_kernel_against_ref(
@@ -54,23 +67,25 @@ def _get_kernel_result(prompt: str, answer: str, completion: str,
             metadata={"error": "eval_kernel_against_ref returned None (likely lock-file or build issue)"},
         )
 
+    # Store in cache for future calls and return
+    _KB_RESULT_CACHE[cache_key] = kb_result
     return kb_result
 
 # --------------------------------------------
 # Individual reward components
 # --------------------------------------------
 
-def compilation_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
+def compilation_reward(prompt: str, completion: str, answer: str = "", **kwargs) -> float:
     """Reward for successful compilation (0.0 or 1.0)"""
     kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     return 1.0 if kb_result.compiled else 0.0
 
-def correctness_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
+def correctness_reward(prompt: str, completion: str, answer: str = "", **kwargs) -> float:
     """Reward for correctness (0.0 or 1.0)"""
     kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     return 1.0 if kb_result.correctness else 0.0
 
-def performance_reward(prompt: str, completion: str, answer: str, 
+def performance_reward(prompt: str, completion: str, answer: str = "", 
                       perf_trials: int = 100, **kwargs) -> float:
     """Reward based on speedup (0.0 to 1.0)"""
     kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)

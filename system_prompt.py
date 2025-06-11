@@ -80,6 +80,4 @@ Provide ONLY the final, executable Python code that defines `ModelNew`, includin
 
 Do not output anything outside the <think> and <code> blocks.
 
-**Your Turn:**
-
-Optimize the following PyTorch architecture:''' 
+''' 

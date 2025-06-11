@@ -46,7 +46,7 @@ args.num_generations = 10
 args.gradient_accumulation_steps = 4
 args.eval_strategy = "steps"
 args.eval_steps = 10
-args.max_steps = 1
+args.max_steps = 100
 
 model, tokenizer = vf.get_model_and_tokenizer(MODEL_NAME)
 trainer = vf.GRPOTrainer(
