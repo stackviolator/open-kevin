@@ -224,7 +224,7 @@ def compute_score_modular(
     scores = {
         "compile": compilation_reward(prompt, completion, answer, **kwargs),
         "correct": correctness_reward(prompt, completion, answer, **kwargs),
-        "performance": performance_reward(prompt, completion, answer, perf_trials=perf_trials, **kwargs),
+        "performance": performance_reward(prompt, completion, answer, **kwargs),
     }
 
     return sum(weights[k] * v for k, v in scores.items())

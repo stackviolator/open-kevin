@@ -2480,6 +2480,7 @@ dependencies = [
     { name = "archon-ai" },
     { name = "datasets" },
     { name = "einops" },
+    { name = "flash-attn" },
     { name = "google-generativeai" },
     { name = "modal" },
     { name = "ninja" },
@@ -2496,9 +2497,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-flash = [
-    { name = "flash-attn" },
-]
 test = [
     { name = "pytest" },
 ]
@@ -2509,7 +2507,7 @@ requires-dist = [
     { name = "archon-ai" },
     { name = "datasets" },
     { name = "einops" },
-    { name = "flash-attn", marker = "extra == 'flash'" },
+    { name = "flash-attn" },
     { name = "google-generativeai" },
     { name = "modal" },
     { name = "ninja" },
@@ -2525,7 +2523,7 @@ requires-dist = [
     { name = "transformers" },
     { name = "verifiers", extras = ["all"], specifier = ">=0.1.0" },
 ]
-provides-extras = ["flash", "test"]
+provides-extras = ["test"]
 
 [[package]]
 name = "openai"
