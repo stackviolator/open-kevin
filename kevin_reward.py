@@ -27,21 +27,34 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time
 def _get_kernel_result(prompt: str, answer: str, completion: str,
                       correct_trials: int = 5, perf_trials: int = 100, **kwargs) -> KernelExecResult:
     parser = vf.XMLParser(['think', 'code'])
-    parsed = parser.parse(completion[-1])
+    print(f"completion: {completion}")
+    parsed = parser.parse(completion[-1]['content'])
     custom_code = parsed.code
 
-    print(f"answer: {answer}")
-    print(f"completion: {completion}")
-    
     ref_code = prompt[-1]['content']
 
-    return eval_kernel_against_ref(
+    # Call kernelbench eval; it may return None if it thinks there was a transient lock-file error.
+    kb_result = eval_kernel_against_ref(
         original_model_src=ref_code,
         custom_model_src=custom_code,
         num_correct_trials=correct_trials,
         num_perf_trials=perf_trials,
         measure_performance=True,
     )
+
+    # Robustness: if eval returns None, synthesize a failure result instead of propagating None.
+    if kb_result is None:
+        # Create a minimal KernelExecResult-like object so downstream code does not crash.
+        # We import here to avoid circular import issues.
+        from kernelbench.src.eval import KernelExecResult
+
+        kb_result = KernelExecResult(
+            compiled=False,
+            correctness=False,
+            metadata={"error": "eval_kernel_against_ref returned None (likely lock-file or build issue)"},
+        )
+
+    return kb_result
 
 # --------------------------------------------
 # Individual reward components

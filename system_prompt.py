@@ -12,8 +12,6 @@ Your answer must be the complete new architecture (no testing code, no other cod
 it will be evaluated and you will be given feedback on its correctness and speedup 
 so you can keep iterating, trying to maximize the speedup.
 
-**Important: Wrap your entire code response in <code> </code> tags. Do not include any other text or explanations outside these tags.**
-
 Here's an example:
 
 <code>
@@ -69,6 +67,18 @@ class ModelNew(nn.Module):
     def forward(self, a, b):
         return self.elementwise_add.elementwise_add_cuda(a, b)
 </code>
+
+Before you start, adhere to the following tag guidelines:
+
+<think>
+Provide your complete, step-by-step reasoning here. Explain which PyTorch operators you will replace, how you design and fuse CUDA kernels, your memory-hierarchy considerations, warp-level optimizations, and any other design choices. Do NOT include any code inside this block.
+</think>
+
+<code>
+Provide ONLY the final, executable Python code that defines `ModelNew`, including any required inline C++/CUDA sources. This block will be extracted and run by the evaluator, so it must be fully self-contained. Do NOT repeat your reasoning here and do not include anything that is not valid Python/C++/CUDA code.
+</code>
+
+Do not output anything outside the <think> and <code> blocks.
 
 **Your Turn:**
 
