@@ -41,4 +41,6 @@ test = [
 ]
 
 [tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["open_kevin"]
 py-modules = ["kevin_reward"]
