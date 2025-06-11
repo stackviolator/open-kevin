@@ -9,6 +9,8 @@ import sys
 import os
 from pathlib import Path
 
+import verifiers as vf
+
 # Add kernelbench to Python path to handle submodule imports
 _current_dir = Path(__file__).parent
 _kernelbench_path = _current_dir / "kernelbench"
@@ -22,11 +24,20 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time
 # Utility functions
 # --------------------------------------------
 
-def _get_kernel_result(reference_code: str, cuda_src: str, 
-                      correct_trials: int = 5, perf_trials: int = 100) -> KernelExecResult:
+def _get_kernel_result(prompt: str, answer: str, completion: str,
+                      correct_trials: int = 5, perf_trials: int = 100, **kwargs) -> KernelExecResult:
+    parser = vf.XMLParser(['think', 'code'])
+    parsed = parser.parse(completion[-1])
+    custom_code = parsed.code
+
+    print(f"answer: {answer}")
+    print(f"completion: {completion}")
+    
+    ref_code = prompt[-1]['content']
+
     return eval_kernel_against_ref(
-        original_model_src=reference_code,
-        custom_model_src=cuda_src,
+        original_model_src=ref_code,
+        custom_model_src=custom_code,
         num_correct_trials=correct_trials,
         num_perf_trials=perf_trials,
         measure_performance=True,
@@ -38,18 +49,18 @@ def _get_kernel_result(reference_code: str, cuda_src: str,
 
 def compilation_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
     """Reward for successful compilation (0.0 or 1.0)"""
-    kb_result = _get_kernel_result(prompt, answer, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     return 1.0 if kb_result.compiled else 0.0
 
 def correctness_reward(prompt: str, completion: str, answer: str, **kwargs) -> float:
     """Reward for correctness (0.0 or 1.0)"""
-    kb_result = _get_kernel_result(prompt, answer, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     return 1.0 if kb_result.correctness else 0.0
 
 def performance_reward(prompt: str, completion: str, answer: str, 
                       perf_trials: int = 100, **kwargs) -> float:
     """Reward based on speedup (0.0 to 1.0)"""
-    kb_result = _get_kernel_result(prompt, answer, **kwargs)
+    kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     if not kb_result.compiled or not kb_result.correctness:
         return 0.0
     
