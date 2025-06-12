@@ -30,6 +30,8 @@ class KevinEnv(MultiTurnEnv):
         pass
 
     def is_completed(self, messages, state) -> bool:
+        print(f"state: {state}")
+        print(f"messages: {messages}")
         if state["attempts"] >= self.max_turns:
             return True
         return False

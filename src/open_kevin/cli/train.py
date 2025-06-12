@@ -3,6 +3,7 @@ from __future__ import annotations
 """Command-line entry point that replicates the original *train.py* while
 organising it under the `open_kevin` namespace.
 
+CUDA_VISIBLE_DEVICES=0 vf-vllm --model 'Qwen/Qwen2.5-1.5B-Instruct'
 CUDA_VISIBLE_DEVICES=1,2,3 accelerate launch --num-processes 3 --config-file ~/verifiers/configs/zero3.yaml -m open_kevin.cli.train
 """
 
