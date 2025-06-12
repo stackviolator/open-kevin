@@ -32,6 +32,18 @@ from kernelbench.scripts.generate_baseline_time import measure_program_time  # t
 # ---------------------------------------------------------------------------
 # Simple, in-memory cache to avoid recompilation when the same code pair is
 # evaluated repeatedly during RL training.
+#
+# IMPORTANT:
+# 1. `KevinEnv.env_response` may call `compute_score_modular` **inside the rollout**
+#    to obtain live feedback (compile success, runtime, etc.) and store these
+#    numbers in the `state` dict that is passed back to the model.
+# 2. Later, the GRPO training loop asks the rubric to score the very same
+#    rollout; it will invoke `compute_score_modular` **again**.  Thanks to this
+#    cache, the second call is an O(1) dictionary lookup and no expensive
+#    compilation / execution is repeated.
+#
+# The key includes the reference code, candidate code, and evaluation settings
+# so that different prompts/trial counts are cached independently.
 # ---------------------------------------------------------------------------
 _KB_RESULT_CACHE: Dict[Tuple[str, str, int, int], "KernelExecResult"] = {}
 
