@@ -78,7 +78,6 @@ def build_trainer() -> vf.GRPOTrainer:  # type: ignore[name-defined]
 
 def main() -> None:  # pragma: no cover
     """Entry-point used by `python -m open_kevin.cli.train` or CLI wrapper."""
-
     trainer = build_trainer()
     trainer.train()
 

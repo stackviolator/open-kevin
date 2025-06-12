@@ -32,7 +32,6 @@ dependencies = [
     "archon-ai",
     "einops",
     "verifiers[all]>=0.1.0",
-    "flash-attn",
 ]
 
 [project.optional-dependencies]
