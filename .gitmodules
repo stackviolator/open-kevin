@@ -1,3 +1,6 @@
 [submodule "kernelbench"]
 	path = kernelbench
 	url = https://github.com/stackviolator/KernelBench.git
+[submodule "verifiers"]
+	path = verifiers
+	url = https://github.com/stackviolator/verifiers
