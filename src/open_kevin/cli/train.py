@@ -17,6 +17,14 @@ import verifiers as vf
 from open_kevin.rewards import compute_score_modular
 from open_kevin.prompts import system_prompt as _system_prompt
 
+from phoenix.otel import register
+
+tracer_provider = register(
+    project_name="open-kevin",
+    auto_instrument=True,
+    endpoint="http://localhost:6006/v1/traces",
+
+)
 
 MODEL_NAME = "qwen/qwen2.5-1.5b-instruct"
 

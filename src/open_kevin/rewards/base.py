@@ -112,7 +112,8 @@ def _uses_disallowed_torch_nn(completion: str) -> bool:
     except Exception:
         # If structured parsing fails, fall back to inspecting the raw text.
         code_src = completion_text
-
+    if code_src is None:
+        return True
     for match in _NN_USAGE_PATTERN.finditer(code_src):
         attr = match.group(1)
         if attr not in _ALLOWED_NN_ATTRS:
@@ -123,8 +124,8 @@ def _uses_disallowed_torch_nn(completion: str) -> bool:
 
 def _get_kernel_result(
     prompt: str,
-    answer: str,
     completion: str,
+    answer: str = "",
     *,
     correct_trials: int = 5,
     perf_trials: int = 100,
@@ -175,16 +176,25 @@ def _get_kernel_result(
     if cache_key in _KB_RESULT_CACHE:
         return _KB_RESULT_CACHE[cache_key]
 
-    kb_result = eval_kernel_against_ref(
-        original_model_src=ref_code,
-        custom_model_src=custom_code,
-        num_correct_trials=correct_trials,
-        num_perf_trials=perf_trials,
-        measure_performance=True,
-    )
+    try:
+        kb_result = eval_kernel_against_ref(
+            original_model_src=ref_code,
+            custom_model_src=custom_code,
+            num_correct_trials=correct_trials,
+            num_perf_trials=perf_trials,
+            measure_performance=True,
+        )
+    except Exception as e:
+        # Catch *any* unexpected error from kernelbench evaluation to
+        # prevent crashes during training or unit tests. Convert it into
+        # a non-fatal KernelExecResult so downstream logic can proceed.
+        kb_result = KernelExecResult(
+            compiled=False,
+            correctness=False,
+            metadata={"error": f"Exception in eval_kernel_against_ref: {e}"},
+        )
 
-    # If kernelbench fails with a lock-file or transient error, synthesise a
-    # failure result to keep downstream code robust.
+    # Handle the case where eval_kernel_against_ref returns None (e.g. due to lock-file contention)
     if kb_result is None:
         kb_result = KernelExecResult(
             compiled=False,
@@ -210,7 +220,6 @@ def correctness_reward(prompt: str, completion: str, answer: str = "", **kwargs)
     """0/1 reward indicating functional correctness of the kernel."""
     kb_result = _get_kernel_result(prompt, answer, completion, **kwargs)
     return 1.0 if kb_result.correctness else 0.0
-
 
 def performance_reward(
     prompt: str,
@@ -254,7 +263,7 @@ _default_weights: Dict[str, float] = {
 def compute_score_modular(
     prompt: str,
     completion: str,
-    answer: str,
+    answer: str = "",
     *,
     perf_trials: int = 100,
     correct_trials: int = 5,
