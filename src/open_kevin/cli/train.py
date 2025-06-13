@@ -8,6 +8,7 @@ CUDA_VISIBLE_DEVICES=1,2,3 accelerate launch --num-processes 3 --config-file ~/v
 """
 
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ import verifiers as vf
 
 from open_kevin.rewards import compute_score_modular
 from open_kevin.prompts import system_prompt as _system_prompt
+from open_kevin.environments.kevin_env import KevinEnv
 
 from phoenix.otel import register
 
@@ -58,17 +60,18 @@ def build_trainer() -> vf.GRPOTrainer:  # type: ignore[name-defined]
     # Extend the system prompt with the parser format string
     system_prompt = _system_prompt + f"\n\nRespond in the following format:\n{parser.get_format_str()}"
 
-    vf_env = vf.SingleTurnEnv(
+    vf_env = KevinEnv(
         dataset=train_dataset,
         eval_dataset=eval_dataset,
         system_prompt=system_prompt,
+        max_turns=8,
         parser=parser,
         rubric=rubric,
     )
 
-    args = vf.grpo_defaults(run_name="kevin-single-turn")
+    args = vf.grpo_defaults(run_name=f"kevin-multi-turn-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}-{vf_env.max_turns}")
     args.num_iterations = 20
-    args.per_device_train_batch_size = 32
+    args.per_device_train_batch_size = 20
     args.num_generations = 5
     args.gradient_accumulation_steps = 2
     args.eval_strategy = "steps"
@@ -88,7 +91,11 @@ def build_trainer() -> vf.GRPOTrainer:  # type: ignore[name-defined]
 def main() -> None:  # pragma: no cover
     """Entry-point used by `python -m open_kevin.cli.train` or CLI wrapper."""
     trainer = build_trainer()
-    trainer.train()
+    try:
+        trainer.train()
+    finally:
+        if hasattr(trainer, "async_generator"):
+            trainer.async_generator.stop()
 
 
 if __name__ == "__main__":  # pragma: no cover

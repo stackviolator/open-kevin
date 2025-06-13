@@ -8,14 +8,15 @@ from open_kevin.rewards import compute_score_modular
 from phoenix.trace import suppress_tracing
 
 class KevinEnv(MultiTurnEnv):
-    def __init__(self, dataset, system_prompt, max_turns: int = 8):
+    def __init__(self, dataset, system_prompt, max_turns: int = 8, parser: XMLParser = None, **kwargs):
         # Use the shared XMLParser from verifiers for <think> and <code> tags
-        self.parser = XMLParser(fields=["think", "code"])
+        self.parser = parser
         super().__init__(
             dataset=dataset,
             system_prompt=system_prompt,
             parser=self.parser,
             max_turns=max_turns,
+            **kwargs,
         )
 
     def initialize_state(self):
