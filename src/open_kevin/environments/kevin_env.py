@@ -78,18 +78,29 @@ class KevinEnv(MultiTurnEnv):
         kb_res = _get_kernel_result(ref_prompt, answer, compact_content)
         state["compiler_errors"] = kb_res.metadata.get("error", "") if not kb_res.compiled else ""
         state["runtime_stats"] = str(getattr(kb_res, "runtime", ""))
+        state["correctness"] = kb_res.correctness
         state["score"] = compute_score_modular(ref_prompt, compact_content, answer)
         state["last_summary"] = summary_text
 
         # 3. Build metadata system message
+        guidance = (
+            "[NEXT_ACTION]\n"
+            "If 'compiler_errors' is not empty, fix the errors and produce a new kernel. "
+            "If the kernel compiles but is incorrect, fix the errors and produce a new kernel. "
+            "If the kernel is correct but slow, keep it correct and try to make it faster. "
+            "Return your reasoning in <think> tags followed by the updated <code> block."
+        )
+
         env_msg = {
             "role": "user",
             "content": (
                 "[METADATA]\n"
                 f"attempt: {state['attempts']} / {self.max_turns}\n"
+                f"compiled: {kb_res.compiled}\n"
+                f"correct: {state['correctness']}\n"
                 f"runtime_stats: {state['runtime_stats']}\n"
                 f"compiler_errors: {state['compiler_errors']}\n"
-                f"score: {state['score']}\n"
+                f"score: {state['score']}\n\n" + guidance
             ),
         }
 
