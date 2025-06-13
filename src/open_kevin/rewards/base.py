@@ -22,9 +22,26 @@ import verifiers as vf
 _current_dir = Path(__file__).resolve()
 # The project root is three levels up: <root>/src/open_kevin/rewards/base.py
 _project_root = _current_dir.parents[3]
-_kernelbench_path = _project_root / "kernelbench"
-if _kernelbench_path.exists() and str(_kernelbench_path) not in sys.path:
-    sys.path.insert(0, str(_kernelbench_path))
+
+# Add the *project root* to ``sys.path`` so that the interpreter can resolve
+# the ``kernelbench`` package (located at <project_root>/kernelbench) in the
+# standard "package on the PYTHONPATH" manner.  Adding the sub-directory
+# itself (i.e. ``<project_root>/kernelbench``) would cause the import machinery
+# to look for ``kernelbench.kernelbench`` which fails.  Therefore, we insert
+# the parent directory instead.
+
+_kernelbench_dir = _project_root / "kernelbench"
+if _kernelbench_dir.exists() and str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+# Some helper scripts inside ``kernelbench/scripts`` perform relative imports
+# such as ``from src.eval import ...``.  For these to resolve, we additionally
+# need the *kernelbench* directory itself on the path so that ``import src``
+# finds ``<kernelbench>/src``.  Insert this **after** the project root to avoid
+# masking the top-level ``kernelbench`` package import earlier.
+
+if _kernelbench_dir.exists() and str(_kernelbench_dir) not in sys.path:
+    sys.path.append(str(_kernelbench_dir))
 
 from kernelbench.src.eval import eval_kernel_against_ref, KernelExecResult  # type: ignore
 from kernelbench.scripts.generate_baseline_time import measure_program_time  # type: ignore
@@ -126,8 +143,31 @@ def _get_kernel_result(
         prompt_text = prompt[-1]["content"]  # type: ignore[index]
 
     parser = vf.XMLParser(["think", "code"])
-    parsed = parser.parse(completion_text)
-    custom_code = parsed.code
+    try:
+        parsed = parser.parse(completion_text)
+        custom_code = parsed.code
+    except Exception as parse_err:
+        # Bail out early if the assistant response does not contain the
+        # expected XML tags or cannot be parsed. This prevents downstream
+        # kernelbench evaluation from crashing on malformed inputs.
+        dummy_result = KernelExecResult(
+            compiled=False,
+            correctness=False,
+            metadata={"error": f"Malformed assistant message: {parse_err}"},
+        )
+        # Cache the dummy result so repeated calls are cheap.
+        _KB_RESULT_CACHE[(prompt_text, completion_text, correct_trials, perf_trials)] = dummy_result
+        return dummy_result
+
+    # Edge-case: missing or empty <code> block → treat as malformed, bail early.
+    if not custom_code or custom_code.strip() == "":
+        dummy_result = KernelExecResult(
+            compiled=False,
+            correctness=False,
+            metadata={"error": "Assistant message lacked <code> content."},
+        )
+        _KB_RESULT_CACHE[(prompt_text, completion_text, correct_trials, perf_trials)] = dummy_result
+        return dummy_result
 
     ref_code = prompt_text
 
@@ -180,7 +220,7 @@ def performance_reward(
     perf_trials: int = 100,
     **kwargs,
 ) -> float:
-    """Continuous reward in \[0,1\] mapping runtime speed-up to a bounded score."""
+    """Continuous reward in [0,1] mapping runtime speed-up to a bounded score."""
     kb_result = _get_kernel_result(prompt, answer, completion, perf_trials=perf_trials, **kwargs)
     if not kb_result.compiled or not kb_result.correctness:
         return 0.0
